@@ -1,0 +1,3 @@
+[submodule "external/g2o"]
+	path = external/g2o
+	url = git@github.com:rimakoe/g2o.git

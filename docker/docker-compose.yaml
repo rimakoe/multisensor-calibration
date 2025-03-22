@@ -1,0 +1,23 @@
+services:
+
+  multisensor_calibration:
+    image: multisensor_calibration:latest
+    container_name: multisensor_calibration
+    stdin_open: true
+    tty: true
+    privileged: true
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    volumes:
+      - type: bind
+        source: ../
+        target: /home/workspace
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+    network_mode: host
+    pid: "host"
+    ipc: "host"
+    environment:
+      DISPLAY: $DISPLAY
