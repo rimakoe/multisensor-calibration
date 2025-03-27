@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot name="my_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Define properties for reuse -->
+    <xacro:property name="lidar_range" value="10.0" />
+    <xacro:property name="lidar_resolution" value="0.01" />
+    <xacro:property name="camera_width" value="640" />
+    <xacro:property name="camera_height" value="480" />
+    <xacro:property name="camera_fov" value="1.57" />
+    <link name="world"></link>
+
+    <joint name="base_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="base_link" />
+    </joint>
+
+    <!-- Base Link -->
+    <link name="base_link">
+        <collision>
+            <origin xyz="0 0 1" rpy="0 0 0" />
+            <geometry>
+                <box size="1 1 1" />
+            </geometry>
+        </collision>
+
+        <visual>
+            <origin xyz="0 0 1" rpy="0 0 0" />
+            <geometry>
+                <box size="1 1 1" />
+            </geometry>
+            <material name="orange" />
+        </visual>
+
+        <inertial>
+            <origin xyz="0 0 1" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia
+                ixx="0.01" ixy="0.0" ixz="0.0"
+                iyy="0.01" iyz="0.0"
+                izz="0.01" />
+        </inertial>
+    </link>
+
+    <xacro:include filename="camera.xacro" />
+
+</robot>
