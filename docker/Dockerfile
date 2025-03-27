@@ -71,6 +71,10 @@ RUN  wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/p
 
 ################
 
+#RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN pip install setuptools==68
+
 RUN echo "export GZ_VERSION=harmonic" >> ~/.bashrc \
     && echo "source /opt/ros/iron/setup.bash" >> ~/.bashrc \
-    && echo "source /home/workspace/ros2_ws/install/local_setup.bash" >> ~/.bashrc
+    && echo "source /home/workspace/ros2_ws/install/local_setup.bash" >> ~/.bashrc \
+    && echo "export GZ_SIM_RESOURCE_PATH=/home/workspace/ros2_ws/install/simulation/share/simulation/models" >> ~/.bashrc
