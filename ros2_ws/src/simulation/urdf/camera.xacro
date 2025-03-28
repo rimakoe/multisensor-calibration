@@ -28,36 +28,47 @@
 
     <gazebo reference="camera_right_link">
         <material>Gazebo/Black</material>
-        <sensor name="camera_right" type="camera">
-            <topic>/camera/right/image</topic>
-            <gz_frame_id>camera_right_link_optical</gz_frame_id>
+        <sensor name="wideangle_camera" type="wideanglecamera">
             <camera>
-                <camera_info_topic>/camera/right/camera_info</camera_info_topic>
-                <horizontal_fov>2.6</horizontal_fov>
-                <vertical_fov>2.6</vertical_fov>
+                <horizontal_fov>3.14</horizontal_fov>
                 <image>
-                    <width>640</width>
-                    <height>640</height>
+                    <width>800</width>
+                    <height>600</height>
                 </image>
-                <distortion>
-                    <k1>-0.04</k1>
-                    <k2>0.001</k2>
-                    <k3>0.00001</k3>
-                    <p1>0.0</p1>
-                    <p2>0.0</p2>
-                    <center>
-                        <x>0.5</x>
-                        <y>0.5</y>
-                    </center>
-                </distortion>
                 <clip>
-                    <near>0.01</near>
-                    <far>60</far>
+                    <near>0.1</near>
+                    <far>100</far>
                 </clip>
+                <!-- A new section named `lens`. -->
+                <lens>
+                    <!-- type element is mandatory -->
+                    <type>custom</type>
+                    <!-- manually defined mapping function r = c1*f*fun(theta/c2 + c3) -->
+                    <!-- More information here:
+                    https://en.wikipedia.org/wiki/Fisheye_lens#Mapping_function -->
+                    <custom_function>
+                        <c1>1.05</c1>
+                        <!-- linear scaling -->
+                        <c2>4</c2>
+                        <!-- angle scaling -->
+                        <f>1.0</f>
+                        <!-- one more scaling parameter -->
+                        <fun>tan</fun>
+                        <!-- one of sin,tan,id -->
+                    </custom_function>
+                    <!-- if it is set to `true` your horizontal FOV will ramain as defined -->
+                    <!-- othervise it depends on lens type and custom function, if there is one -->
+                    <scale_to_hfov>true</scale_to_hfov>
+                    <!-- clip everything that is outside of this angle -->
+                    <cutoff_angle>3.1415</cutoff_angle>
+                    <!-- resolution of the cubemap texture, the highter it is - the sharper is your
+                    image -->
+                    <env_texture_size>512</env_texture_size>
+                </lens>
             </camera>
             <always_on>1</always_on>
-            <update_rate>50</update_rate>
-            <visualize>true</visualize>
+            <update_rate>30</update_rate>
+            <topic>wide_angle_camera</topic>
         </sensor>
 
     </gazebo>

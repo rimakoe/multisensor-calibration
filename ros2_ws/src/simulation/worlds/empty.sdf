@@ -1,27 +1,28 @@
 <?xml version="1.0"?>
-<sdf version="1.7">
+<sdf version="1.6">
 	<world name="empty_world">
 		<physics name="1ms" type="ignored">
 			<max_step_size>0.001</max_step_size>
 			<real_time_factor>1.0</real_time_factor>
 		</physics>
 		<plugin
-			filename="libignition-gazebo-physics-system.so"
-			name="ignition::gazebo::systems::Physics">
-		</plugin>
-		<plugin
-			filename="libignition-gazebo-user-commands-system.so"
-			name="ignition::gazebo::systems::UserCommands">
-		</plugin>
-		<plugin
-			filename="libignition-gazebo-scene-broadcaster-system.so"
-			name="ignition::gazebo::systems::SceneBroadcaster">
+			filename="gz-sim-physics-system"
+			name="gz::sim::systems::Physics">
 		</plugin>
 		<plugin
 			filename="gz-sim-sensors-system"
 			name="gz::sim::systems::Sensors">
-			<render_engine>ogre</render_engine>
+			<render_engine>ogre2</render_engine>
 		</plugin>
+		<plugin
+			filename="gz-sim-user-commands-system"
+			name="gz::sim::systems::UserCommands">
+		</plugin>
+		<plugin
+			filename="gz-sim-scene-broadcaster-system"
+			name="gz::sim::systems::SceneBroadcaster">
+		</plugin>
+
 
 		<gui fullscreen="0">
 			<!-- 3D scene -->
@@ -204,8 +205,5 @@
 				</visual>
 			</link>
 		</model>
-		<include>
-			<uri>model://topview_camera.sdf</uri>
-		</include>
 	</world>
 </sdf>
