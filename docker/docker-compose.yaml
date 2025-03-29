@@ -21,3 +21,10 @@ services:
     ipc: "host"
     environment:
       DISPLAY: $DISPLAY
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]

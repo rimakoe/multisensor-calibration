@@ -24,30 +24,31 @@
             <sensor name="${name}" type="gpu_lidar">
                 <pose relative_to="${name}_link">0 0 0 0 0 0</pose>
                 <topic>/lidar/${name}</topic>
+                <gz_frame_id>${name}_link</gz_frame_id>
                 <update_rate>10</update_rate>
                 <ray>
                     <scan>
                         <horizontal>
                             <samples>640</samples>
-                            <resolution>1</resolution>
-                            <min_angle>-1.396263</min_angle>
-                            <max_angle>1.396263</max_angle>
+                            <resolution>0.01</resolution>
+                            <min_angle>-3.14</min_angle>
+                            <max_angle>3.14</max_angle>
                         </horizontal>
                         <vertical>
-                            <samples>1</samples>
+                            <samples>50</samples>
                             <resolution>0.01</resolution>
-                            <min_angle>0</min_angle>
-                            <max_angle>0</max_angle>
+                            <min_angle>-0.5</min_angle>
+                            <max_angle>0.5</max_angle>
                         </vertical>
                     </scan>
                     <range>
                         <min>0.08</min>
                         <max>10.0</max>
-                        <resolution>0.01</resolution>
+                        <resolution>0.001</resolution>
                     </range>
                 </ray>
                 <always_on>1</always_on>
-                <visualize>true</visualize>
+                <visualize>false</visualize>
             </sensor>
         </gazebo>
     </xacro:macro>
