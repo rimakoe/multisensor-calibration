@@ -15,7 +15,6 @@ setup(
         (os.path.join("share", package_name, "launch"), glob(os.path.join("launch", "*.launch.py"))),
         (os.path.join("share", package_name, "worlds"), glob(os.path.join("worlds", "*.xacro"))),
         (os.path.join("share", package_name, "worlds"), glob(os.path.join("worlds", "*.sdf"))),
-        (os.path.join("share", package_name, "models"), glob(os.path.join("models", "*.sdf"))),
         (os.path.join("share", package_name, "urdf"), glob(os.path.join("urdf", "*.xacro"))),
     ],
     install_requires=["setuptools"],
