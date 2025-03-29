@@ -1,0 +1,6 @@
+{
+    "xml.format.maxLineWidth": 150,
+    "black-formatter.args": [
+        "--line-length=150"
+    ]
+}

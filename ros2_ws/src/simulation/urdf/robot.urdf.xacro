@@ -1,47 +1,37 @@
 <?xml version="1.0"?>
-<robot name="my_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<robot name="vehicle" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:include filename="$(find simulation)/worlds/utils.xacro" />
 
-    <!-- Define properties for reuse -->
-    <xacro:property name="lidar_range" value="10.0" />
-    <xacro:property name="lidar_resolution" value="0.01" />
-    <xacro:property name="camera_width" value="640" />
-    <xacro:property name="camera_height" value="480" />
-    <xacro:property name="camera_fov" value="1.57" />
-    <link name="world"></link>
+    <link name="world_link"></link>
 
     <joint name="base_joint" type="fixed">
         <origin xyz="0 0 0" rpy="0 0 0" />
         <parent link="world" />
         <child link="base_link" />
+        <origin xyz="0 0 0.0" rpy="0 0 0" />
     </joint>
 
     <!-- Base Link -->
     <link name="base_link">
-        <visual>
-            <origin xyz="0 0 1" rpy="0 0 0" />
+        <visual name="base_link_visual">
+            <origin xyz="0 0 0.25" rpy="0 0 0" />
             <geometry>
-                <box size="1 1 1" />
+                <box size="0.5 0.5 0.5" />
             </geometry>
-            <material name="orange" />
-        </visual>
-        <visual>
-            <origin rpy="0 0 0" xyz="0 0 1" />
-            <geometry>
-                <box size="1 1 1" />
-            </geometry>
-            <material name="orange" />
         </visual>
         <inertial>
-            <origin rpy="0 0 0" xyz="0 0 1" />
+            <origin rpy="0 0 0" xyz="0 0 0" />
             <mass value="1" />
             <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01" />
         </inertial>
     </link>
 
     <xacro:include filename="camera.xacro" />
-    <xacro:camera_macro name="top_view_camera_front" parent_link="base_link" x="-1.0" y="0.0"
-        z="0.3"
-        roll="0.0" pitch="0.0" yaw="0.0" />
-    <xacro:camera_macro name="top_view_camera_rear" parent_link="base_link" x="1.0" y="0.0" z="0.3"
-        roll="0.0" pitch="0.0" yaw="3.14" />
+    <xacro:camera_macro name="top_view_camera_front" parent_link="base_link" x="1.0" y="0.0" z="0.3" roll="0.0" pitch="0.0" yaw="0.0" />
+    <xacro:camera_macro name="top_view_camera_left" parent_link="base_link" x="0.0" y="0.5" z="0.3" roll="0.0" pitch="0.0" yaw="1.5" />
+    <xacro:camera_macro name="top_view_camera_right" parent_link="base_link" x="0.0" y="-0.5" z="0.3" roll="0.0" pitch="0.0" yaw="-1.5" />
+    <xacro:camera_macro name="top_view_camera_rear" parent_link="base_link" x="-1.0" y="0.0" z="0.3" roll="0.0" pitch="0.0" yaw="3.14" />
+
+    <xacro:include filename="lidar.xacro" />
+    <xacro:lidar_macro name="ref_lidar" parent_link="base_link" x="0.0" y="0.0" z="1.0" roll="0.0" pitch="0.0" yaw="0.0" />
 </robot>

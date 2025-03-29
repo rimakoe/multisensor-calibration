@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:include filename="$(find simulation)/worlds/utils.xacro" />
     <xacro:macro name="camera_macro" params="name parent_link x y z roll pitch yaw">
 
         <joint name="${name}_joint" type="fixed">
@@ -9,11 +10,10 @@
         </joint>
 
         <link name="${name}_link">
-            <visual>
+            <visual name="${name}_visual">
                 <geometry>
                     <box size="0.1 0.1 0.1" /> <!-- Example camera size -->
                 </geometry>
-                <material name="black" />
             </visual>
         </link>
 
@@ -51,7 +51,7 @@
                         <!-- if it is set to `true` your horizontal FOV will ramain as defined -->
                         <!-- othervise it depends on lens type and custom function, if there is
                             one -->
-                        <scale_to_hfov>true</scale_to_hfov>
+                        <scale_to_hfov>false</scale_to_hfov>
                         <!-- clip everything that is outside of this angle -->
                         <cutoff_angle>3.1415</cutoff_angle>
                         <!-- resolution of the cubemap texture, the highter it is - the sharper
@@ -63,7 +63,10 @@
                 </camera>
                 <always_on>1</always_on>
                 <update_rate>30</update_rate>
-                <topic>/camera/${name}</topic>
+                <topic>/camera/${name}/image</topic>
+                <camera_info>
+                    <topic>/camera/${name}/camera_info</topic>
+                </camera_info>
             </sensor>
         </gazebo>
     </xacro:macro>
