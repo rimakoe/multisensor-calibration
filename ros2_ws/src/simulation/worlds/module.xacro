@@ -1,21 +1,63 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:include filename="utils.xacro" />
-    <xacro:macro name="module_macro" params="name parent_link x y z roll pitch yaw">
+    <xacro:macro name="module_macro" params="name start_id parent_link x y z roll pitch yaw">
         <model name="${name}">
             <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
 
             <link name="${name}_link">
                 <visual name="${name}_visual">
-                    <pose>${x} ${y} ${z} ${roll} ${pitch} ${yaw}</pose>
+                    <pose>0.0 0.0 1.0 0.0 0.0 0.0</pose>
                     <geometry>
                         <box>
-                            <size>0.1 1.0 3.0</size>
+                            <size>0.02 1.5 2.0</size>
                         </box>
                     </geometry>
                     <xacro:set_material color="0.0 0.0 1.0" />
                 </visual>
             </link>
+
+
+        </model>
+        <model name="${name}_marker_${start_id}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <xacro:marker_macro name="marker" id="${start_id}" parent_link="${name}_link"
+                x="-0.011" y="0.0" z="1.0" roll="0.0" pitch="90.0" yaw="0.0"
+            />
+        </model>
+
+        <model name="${name}_marker_${start_id + 1}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <xacro:marker_macro name="marker" id="${start_id + 1}" parent_link="${name}_link"
+                x="-0.011" y="0.5" z="1.0" roll="0.0" pitch="90.0" yaw="0.0"
+            />
+        </model>
+
+        <model name="${name}_marker_${start_id + 2}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <xacro:marker_macro name="marker" id="${start_id + 2}" parent_link="${name}_link"
+                x="-0.011" y="-0.5" z="1.0" roll="0.0" pitch="90.0" yaw="0.0"
+            />
+        </model>
+
+        <model name="${name}_marker_${start_id + 3}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <xacro:marker_macro name="marker" id="${start_id + 3}" parent_link="${name}_link"
+                x="-0.011" y="0.0" z="1.5" roll="0.0" pitch="90.0" yaw="0.0"
+            />
+        </model>
+
+        <model name="${name}_marker_${start_id + 4}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <xacro:marker_macro name="marker" id="${start_id + 4}" parent_link="${name}_link"
+                x="-0.011" y="0.0" z="0.5" roll="0.0" pitch="90.0" yaw="0.0"
+            />
         </model>
     </xacro:macro>
 </robot>

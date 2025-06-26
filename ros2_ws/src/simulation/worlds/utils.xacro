@@ -8,4 +8,24 @@
             <emissive>0 0 0 1</emissive>
         </material>
     </xacro:macro>
+
+    <xacro:macro name="marker_macro" params="parent_link name id x y z roll pitch yaw">
+        <model name="${name}_${id}">
+            <static>true</static>
+            <pose>${x} ${y} ${z} ${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}</pose>
+            <link name="${name}_${id}_link">
+                <visual name="${name}_${id}_visual">
+                    <geometry>
+                        <cylinder>
+                            <radius>0.1</radius>
+                            <length>0.001</length>
+                        </cylinder>
+                    </geometry>
+                </visual>
+            </link>
+            <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+                <label>${id}</label>
+            </plugin>
+        </model>
+    </xacro:macro>
 </robot>

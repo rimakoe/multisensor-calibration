@@ -6,7 +6,7 @@
         <joint name="${name}_joint" type="fixed">
             <parent link="${parent_link}" />
             <child link="${name}_link" />
-            <origin xyz="${x} ${y} ${z}" rpy="${roll} ${pitch} ${yaw}" />
+            <origin xyz="${x} ${y} ${z}" rpy="${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}" />
         </joint>
 
         <link name="${name}_link">
@@ -44,7 +44,7 @@
                     <range>
                         <min>0.08</min>
                         <max>10.0</max>
-                        <resolution>0.001</resolution>
+                        <resolution>0.0001</resolution>
                     </range>
                 </ray>
                 <always_on>1</always_on>

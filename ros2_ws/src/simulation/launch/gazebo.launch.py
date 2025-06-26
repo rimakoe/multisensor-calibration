@@ -19,7 +19,7 @@ from launch.substitutions import LaunchConfiguration, Command
 from launch.event_handlers import OnProcessExit
 
 camera_names = ["top_view_camera_front", "top_view_camera_rear", "top_view_camera_left", "top_view_camera_right"]
-lidar_names = ["ref_lidar"]
+lidar_names = ["ref_lidar", "ref_lidar_front", "ref_lidar_right", "ref_lidar_rear", "ref_lidar_left"]
 
 
 def create_lidar_bridges(lidar_topic_namepsace: str = "lidar") -> list[str]:
@@ -36,9 +36,11 @@ def create_camera_bridges(camera_topic_namepsace: str = "camera") -> list[str]:
     for name in camera_names:
         prefix = "/" + "/".join([camera_topic_namepsace, name])
         topic_info = "/".join([prefix, "camera_info"])
-        topic_image = "/".join([prefix, "image"])
+        topic_image = "/".join([prefix, "bbox_image"])
+        topic_bbox = "/".join([prefix, "bbox"])
         camera_bridges.append("@".join([topic_info, "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"]))
         camera_bridges.append("@".join([topic_image, "sensor_msgs/msg/Image", "gz.msgs.Image"]))
+        camera_bridges.append("@".join([topic_bbox, "vision_msgs/msg/Detection2DArray", "gz.msgs.AnnotatedAxisAligned2DBox_V"]))
     return camera_bridges
 
 

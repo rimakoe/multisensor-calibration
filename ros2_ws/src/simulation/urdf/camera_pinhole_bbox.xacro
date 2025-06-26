@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:include filename="$(find simulation)/worlds/utils.xacro" />
+    <xacro:macro name="camera_pinhole_macro" params="name parent_link hfov width height x y z roll pitch yaw">
+
+        <joint name="${name}_joint" type="fixed">
+            <parent link="${parent_link}" />
+            <child link="${name}_link" />
+            <origin xyz="${x} ${y} ${z}" rpy="${roll * pi / 180.0} ${pitch * pi / 180.0} ${yaw * pi / 180.0}" />
+        </joint>
+
+        <link name="${name}_link">
+            <visual name="${name}_visual">
+                <geometry>
+                    <box size="0.1 0.1 0.1" /> <!-- Example camera size -->
+                </geometry>
+            </visual>
+        </link>
+
+        <gazebo reference="${name}_link">
+            <material>Gazebo/Black</material>
+
+            <sensor name="${name}" type="boundingbox_camera">
+                <camera>
+                    <box_type>2d</box_type>
+                    <horizontal_fov>${hfov * pi / 180.0}</horizontal_fov>
+                    <image>
+                        <width>${width}</width>
+                        <height>${height}</height>
+                    </image>
+                    <clip>
+                        <near>0.1</near>
+                        <far>1000</far>
+                    </clip>
+                </camera>
+                <always_on>1</always_on>
+                <update_rate>10</update_rate>
+                <visualize>true</visualize>
+                <camera_info>
+                    <topic>/camera/${name}/bbox/camera_info</topic>
+                </camera_info>
+                <topic>/camera/${name}/bbox</topic>
+            </sensor>
+        </gazebo>
+    </xacro:macro>
+</robot>

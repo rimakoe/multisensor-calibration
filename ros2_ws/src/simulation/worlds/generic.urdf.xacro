@@ -13,7 +13,6 @@
 		<plugin
 			filename="gz-sim-sensors-system"
 			name="gz::sim::systems::Sensors">
-			<render_engine>ogre2</render_engine>
 		</plugin>
 		<plugin
 			filename="gz-sim-user-commands-system"
@@ -136,10 +135,14 @@
 			</link>
 		</model>
 
-		<xacro:module_macro name="module_01" parent_link="world" x="5.0" y="0.0" z="0.0" roll="0.0" pitch="0.0" yaw="0.0" />
-		<xacro:module_macro name="module_02" parent_link="world" x="0.0" y="5.0" z="0.0" roll="0.0" pitch="0.0" yaw="1.5" />
-		<xacro:module_macro name="module_03" parent_link="world" x="-5.0" y="0.0" z="0.0" roll="0.0" pitch="0.0" yaw="3.0" />
-		<xacro:module_macro name="module_04" parent_link="world" x="0.0" y="-5.0" z="0.0" roll="0.0" pitch="0.0" yaw="-1.5" />
-		<xacro:module_macro name="module_05" parent_link="world" x="2.0" y="-5.0" z="0.0" roll="0.0" pitch="0.0" yaw="-0.75" />
+		<xacro:module_macro name="module_01" start_id="0" parent_link="world" x="4.0" y="0.0" z="0.0" roll="0.0" pitch="0.0" yaw="0.0" />
+		<xacro:module_macro name="module_02" start_id="30" parent_link="world" x="0.0" y="3.0" z="0.0" roll="0.0" pitch="0.0" yaw="90" />
+		<xacro:module_macro name="module_03" start_id="60" parent_link="world" x="-3.0" y="0.0" z="0.0" roll="0.0" pitch="0.0" yaw="180" />
+		<xacro:module_macro name="module_04" start_id="90" parent_link="world" x="0.0" y="-3.0" z="0.0" roll="0.0" pitch="0.0" yaw="-90" />
+		<xacro:module_macro name="module_05" start_id="120" parent_link="world" x="2.5" y="2.5" z="0.0" roll="0.0" pitch="0.0" yaw="45" />
+		<xacro:module_macro name="module_06" start_id="150" parent_link="world" x="-2.5" y="2.5" z="0.0" roll="0.0" pitch="0.0" yaw="135" />
+		<xacro:module_macro name="module_07" start_id="180" parent_link="world" x="-2.5" y="-2.5" z="0.0" roll="0.0" pitch="0.0" yaw="225" />
+		<xacro:module_macro name="module_08" start_id="210" parent_link="world" x="2.5" y="-2.5" z="0.0" roll="0.0" pitch="0.0" yaw="-45" />
+
 	</world>
 </sdf>
