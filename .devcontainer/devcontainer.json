@@ -13,18 +13,14 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"ms-vscode.cpptools",
-				"waderyan.gitblame",
-				"ms-vscode.cpptools-themes",
-				"twxs.cmake",
-				"donjayamanne.python-extension-pack",
-				"ms-iot.vscode-ros",
 				"mhutchie.git-graph",
 				"arturock.gitstash",
 				"bierner.markdown-mermaid",
-				"marus25.cortex-debug",
 				"tomoki1207.pdf",
-				"redhat.vscode-xml"
+				"redhat.vscode-xml",
+				"azurity.pcd-viewer",
+				"ms-python.python",
+				"ms-python.black-formatter"
 			]
 		}
 	}

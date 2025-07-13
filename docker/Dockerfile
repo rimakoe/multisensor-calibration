@@ -22,13 +22,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-rolling-cv-bridge \
     ros-rolling-vision-opencv \
     ros-rolling-ros-gz \
-    python3-colcon-common-extensions \
     python3-dev \
+    python3-colcon-common-extensions \
     pip \
     git \
     cmake \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    ros-rolling-ros2bag \
+    python3-venv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv
+    # && echo "source /opt/venv/bin/activate" >> ~/.bashrc
+
+ENV PATH=/opt/venv/bin:$PATH
+
+RUN pip install colcon-common-extensions pypcd4 opencv-python==3.4.18.65 numpy==1.26.4
 
 #RUN  wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
 #    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \

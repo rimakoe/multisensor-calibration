@@ -48,7 +48,7 @@ def generate_launch_description():
     package_name = "simulation"
     base_path = Path(get_package_share_directory(package_name))
     path_to_robot_xacro = os.path.join(base_path, "urdf", "robot.urdf.xacro")
-    path_to_world_xacro = os.path.join(base_path, "worlds", "generic.urdf.xacro")
+    path_to_world_xacro = os.path.join(base_path, "worlds", "autogen.urdf.xacro")
     path_to_world_sdf = path_to_world_xacro.strip(".xacro").replace(".urdf", ".sdf")
 
     launch_gazebo = IncludeLaunchDescription(
