@@ -4,6 +4,8 @@ import pandas as pd
 import scipy as sp
 from scipy.spatial.transform import Rotation
 from utils import *
+from PIL import Image
+from pypcd4 import PointCloud
 
 
 class Node:
@@ -78,9 +80,9 @@ class SE3(Node):
         return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
 
     def __matmul__(self, other: "SE3") -> "SE3":
-        r_new = self.rotation * other.rotation
+        r_new = Rotation.from_matrix(self.rotation.as_matrix() @ other.rotation.as_matrix())
         t_new = self.translation + self.rotation.apply(other.translation)
-        return SE3(r_new, t_new)
+        return SE3(name=self.name + "@" + other.name, rotation=r_new, translation=t_new)
 
     def __repr__(self):
         t: np.ndarray = np.round(self.translation, 3)
@@ -133,11 +135,13 @@ class Sensor(SE3):
     def __init__(
         self,
         name: str,
+        data: np.ndarray = None,
         parent=None,
         rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
         translation=np.array([0, 0, 0]),
     ):
         super().__init__(name, parent, rotation, translation)
+        self.data = data
 
     class Intrinsics:
         pass  # TODO clarify the camera intrinsics here!
@@ -158,22 +162,26 @@ class Lidar(Sensor):
     def __init__(
         self,
         name: str,
+        data: PointCloud = None,
+        features: pd.DataFrame = None,
         parent=None,
         rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
         translation=np.array([0, 0, 0]),
     ):
-        super().__init__(name, parent, rotation, translation)
+        super().__init__(name, data, parent, rotation, translation)
 
 
 class Camera(Sensor):
     def __init__(
         self,
         name: str,
+        data: Image = None,
+        features: pd.DataFrame = None,
         parent=None,
         rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
         translation=np.array([0, 0, 0]),
     ):
-        super().__init__(name, parent, rotation, translation)
+        super().__init__(name, data, parent, rotation, translation)
 
 
 class Marker(SE3):
@@ -284,9 +292,6 @@ class XACRO:
         with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "empty.urdf.xacro")) as f:
             self.empty_file = f.read()
 
-    def __create_plane(self, plane: Plane):
-        pass
-
     def export(self):
         output = ""
         # output += self.__prefix
@@ -300,6 +305,49 @@ class XACRO:
         with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "autogen.urdf.xacro"), "w") as f:
             f.write(autogen)
         return autogen
+
+
+def to_obc(root: SE3):
+    content = []
+    content.append("\t".join(["x", "y", "z"]) + "\n")
+    rows = []
+    for depth1 in root.children:
+        if type(depth1) is Plane:
+            for depth2 in depth1.children:
+                if type(depth2) is Marker:
+                    world_coordinate = depth1 @ depth2
+                    r = world_coordinate.rotation.as_euler("xyz", degrees=True)
+                    content.append(
+                        "\t".join(
+                            [
+                                str(world_coordinate.translation[0]),
+                                str(world_coordinate.translation[1]),
+                                str(world_coordinate.translation[1]),
+                            ]
+                        )
+                        + "\n"
+                    )
+                    rows.extend(
+                        [
+                            {
+                                #                "name": node.name,
+                                "path": "/".join([depth1.name, depth2.name]),
+                                "id": depth2.id,
+                                "x": world_coordinate.translation[0],
+                                "y": world_coordinate.translation[1],
+                                "z": world_coordinate.translation[2],
+                                "roll": r[0],
+                                "pitch": r[1],
+                                "yaw": r[2],
+                                "depth": 2,
+                            }
+                        ]
+                    )
+    with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "autogen.obc"), "w") as f:
+        f.writelines(content)
+    df = pd.DataFrame(rows)
+    print(df)
+    return content
 
 
 if __name__ == "__main__":
@@ -322,7 +370,7 @@ if __name__ == "__main__":
     plane = Plane(name="p1", translation=np.array([2.0, 0.0, 1.0]), rotation=Rotation.from_euler("xyz", [0.0, -90.0, 0.0], degrees=True))
     plane.add_child(
         Marker(
-            name="first",
+            name="0",
             id=0,
             translation=np.array([-0.25, 0.0, 0.02]),
             rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True),
@@ -330,7 +378,7 @@ if __name__ == "__main__":
     )
     plane.add_child(
         Marker(
-            name="second",
+            name="1",
             id=1,
             translation=np.array([0.25, 0.0, 0.02]),
             rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True),
@@ -338,7 +386,7 @@ if __name__ == "__main__":
     )
     plane.add_child(
         Marker(
-            name="third",
+            name="2",
             id=2,
             translation=np.array([0.0, 0.0, 0.02]),
             rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True),
@@ -371,3 +419,4 @@ if __name__ == "__main__":
     world.add_child(plane)
     xacro = XACRO(world)
     print(xacro.export())
+    to_obc(world)
