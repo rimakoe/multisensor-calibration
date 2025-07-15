@@ -47,14 +47,7 @@ class SE3:
     def as_dict(self, degrees: bool = True):
         r = self.rotation.as_euler("xyz", degrees=degrees)
         t = self.translation
-        return {
-            "x": t[0],
-            "y": t[1],
-            "z": t[2],
-            "roll": r[0],
-            "pitch": r[1],
-            "yaw": r[2],
-        }
+        return {"x": t[0], "y": t[1], "z": t[2], "roll": r[0], "pitch": r[1], "yaw": r[2]}
 
     def inverse(self):
         return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
@@ -126,7 +119,7 @@ class Frame:
                 "path": "/".join([f.name for f in current_path]),
             }
         )
-        if type(frame) is Marker:
+        if issubclass(type(frame), Marker):
             d.update({"id": frame.id})
 
         row = [d]
@@ -239,17 +232,6 @@ class Camera(Sensor):
 
 
 class Marker(Frame):
-    __template = "\n".join(
-        [
-            """    <model name="{marker_name}_marker_{marker_id}">""",
-            """        <static>true</static>""",
-            """        <pose>{x} {y} {z} {roll} {pitch} {yaw}</pose>""",
-            """        <xacro:marker_macro name="marker" id="{marker_id}" parent_link="{marker_name}_link" x="{x_marker}" y="{y_marker}" z="{z_marker}" roll="{roll_marker}" pitch="{pitch_marker}" yaw="{yaw_marker}"/>""",
-            """    </model>""",
-            """""",
-        ]
-    )
-
     def __init__(
         self,
         id: int,
@@ -260,49 +242,8 @@ class Marker(Frame):
         super().__init__(name, parent, transform)
         self.id = id
 
-    def as_xacro(self) -> str:
-        r = self.parent.transform.rotation.as_euler("xyz")
-        r_marker = self.transform.rotation.as_euler("xyz")
-        return self.__template.format(
-            marker_name=self.name,
-            marker_id=self.id,
-            x=self.parent.transform.translation[0],
-            y=self.parent.transform.translation[1],
-            z=self.parent.transform.translation[2],
-            roll=r[0],
-            pitch=r[1],
-            yaw=r[2],
-            x_marker=self.transform.translation[0],
-            y_marker=self.transform.translation[1],
-            z_marker=self.transform.translation[2],
-            roll_marker=r_marker[0],
-            pitch_marker=r_marker[1],
-            yaw_marker=r_marker[2],
-        )
-
 
 class Plane(Frame):
-    __template = "\n".join(
-        [
-            """    <model name="{name}">""",
-            """         <static>true</static>""",
-            """         <pose>{x} {y} {z} {roll} {pitch} {yaw}</pose>""",
-            """         <link name="{name}_link">""",
-            """             <visual name="{name}_visual">""",
-            """             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>""",
-            """                 <geometry>""",
-            """                     <box>""",
-            """                         <size>1.0 1.0 0.02</size>""",
-            """                     </box>""",
-            """                 </geometry>""",
-            """             <xacro:set_material color="0.0 0.0 1.0" />""",
-            """             </visual>""",
-            """         </link>""",
-            """    </model>""",
-            """""",
-        ]
-    )
-
     def __init__(
         self,
         name: str,
@@ -313,95 +254,6 @@ class Plane(Frame):
 
     def get_normal(self):
         return self.transform.rotation.apply(np.array([0, 0, 1]))
-
-    def as_xacro(self):
-        euler = self.transform.rotation.as_euler("xyz")
-        return self.__template.format(
-            name=self.name,
-            x=self.transform.translation[0],
-            y=self.transform.translation[1],
-            z=self.transform.translation[2],
-            roll=euler[0],
-            pitch=euler[1],
-            yaw=euler[2],
-        )
-
-
-class XACRO:
-    __prefix = "\n".join(
-        [
-            """<?xml version="1.0"?>""",
-            """    <robot xmlns:xacro="http://www.ros.org/wiki/xacro">""",
-            """    <xacro:include filename="utils.xacro" />""",
-            """""",
-        ]
-    )
-
-    __suffix = """</robot>"""
-
-    def __init__(self, origin: SE3):
-        self.origin = origin
-        with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "empty.urdf.xacro")) as f:
-            self.empty_file = f.read()
-
-    def export(self):
-        output = ""
-        # output += self.__prefix
-        for child in self.origin.children:
-            if type(child) is not Plane:
-                continue
-            output += child.as_xacro()
-            for marker in child.children:
-                if type(marker) is not Marker:
-                    continue
-                output += marker.as_xacro()
-        # output += self.__suffix
-        autogen = self.empty_file.replace("<!-- OBJECTS -->", output)
-        with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "autogen.urdf.xacro"), "w") as f:
-            f.write(autogen)
-
-
-def to_obc(root: Frame):
-    content = []
-    content.append("\t".join(["x", "y", "z"]) + "\n")
-    rows = []
-    for frame1 in root.children:
-        if type(frame1) is Plane:
-            for frame2 in frame1.children:
-                if type(frame2) is Marker:
-                    world_transform = frame1.transform @ frame2.transform
-                    r = world_transform.rotation.as_euler("xyz", degrees=True)
-                    content.append(
-                        "\t".join(
-                            [
-                                str(world_transform.translation[0]),
-                                str(world_transform.translation[1]),
-                                str(world_transform.translation[1]),
-                            ]
-                        )
-                        + "\n"
-                    )
-                    rows.extend(
-                        [
-                            {
-                                #                "name": node.name,
-                                "path": "/".join([frame1.name, frame2.name]),
-                                "id": frame2.id,
-                                "x": world_transform.translation[0],
-                                "y": world_transform.translation[1],
-                                "z": world_transform.translation[2],
-                                "roll": r[0],
-                                "pitch": r[1],
-                                "yaw": r[2],
-                                "depth": 2,
-                            }
-                        ]
-                    )
-    with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "autogen.obc"), "w") as f:
-        f.writelines(content)
-    df = pd.DataFrame(rows)
-    print(df)
-    return content
 
 
 if __name__ == "__main__":
@@ -420,55 +272,4 @@ if __name__ == "__main__":
 
     print(vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
 
-    world = Frame(name="world")
-    plane = Plane(
-        name="p1",
-        transform=SE3(translation=np.array([2.0, 0.0, 1.0]), rotation=Rotation.from_euler("xyz", [0.0, -90.0, 0.0], degrees=True)),
-    )
-    plane.add_child(
-        Marker(
-            name="0",
-            id=0,
-            transform=SE3(translation=np.array([-0.25, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    plane.add_child(
-        Marker(
-            name="1",
-            id=1,
-            transform=SE3(translation=np.array([0.25, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    plane.add_child(
-        Marker(
-            name="2",
-            id=2,
-            transform=SE3(translation=np.array([0.0, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    plane.add_child(
-        Marker(
-            name="3",
-            id=3,
-            transform=SE3(translation=np.array([0.0, 0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    plane.add_child(
-        Marker(
-            name="4",
-            id=4,
-            transform=SE3(translation=np.array([0.0, -0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    plane.add_child(
-        Marker(
-            name="5",
-            id=5,
-            transform=SE3(translation=np.array([0.25, 0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
-        )
-    )
-    world.add_child(plane)
-    xacro = XACRO(world)
-    xacro.export()
-    to_obc(world)
-    print(world.as_dataframe(only_leafs=False, relative_coordinates=True))
+    # print(world.as_dataframe(only_leafs=False, relative_coordinates=True))

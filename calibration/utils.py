@@ -54,3 +54,16 @@ def read_obc(filepath: str) -> pd.DataFrame:
 
 def read_bmp(filepath: str) -> Image:
     return Image.open(filepath)
+
+
+def write_obc(dataframe: pd.DataFrame, output_filepath: str):
+    required_columns = ["id", "x", "y", "z"]
+    missing = [column for column in required_columns if column not in dataframe.columns]
+    if missing:
+        print(f"Can't export DataFrame to OBC - Missing columns: {missing}")
+        return
+    dataframe[required_columns].to_csv(path_or_buf=output_filepath, sep="\t", index=False)
+
+
+def read_obc(filepath: str) -> pd.DataFrame:
+    return pd.read_csv(filepath_or_buffer=filepath, sep="\t")
