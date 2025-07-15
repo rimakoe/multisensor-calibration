@@ -3,37 +3,28 @@ from typing import Tuple
 
 
 class XACRO:
-    __prefix = "\n".join(
-        [
-            """<?xml version="1.0"?>""",
-            """    <robot xmlns:xacro="http://www.ros.org/wiki/xacro">""",
-            """    <xacro:include filename="utils.xacro" />""",
-            """""",
-        ]
-    )
-
-    __suffix = """</robot>"""
-
     def __init__(self):
         self.world = Frame("autogen")
         with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", "empty.urdf.xacro")) as f:
             self.empty_file = f.read()
 
-    def export(self):
-        # CREATE THE autogen.urdf.xacro
+    def flatten(self, frame: Frame = None, path: List[Frame] = None) -> str:
+        if not frame:
+            frame = self.world
+        if not path:
+            path = []
+        current_path: List[Frame] = path + [frame]
         output = ""
-        # output += self.__prefix
-        for child in self.world.children:
-            if type(child) is not XACROPlane:
-                continue
-            output += child.as_xacro()
-            for marker in child.children:
-                if type(marker) is not XACROMarker:
-                    continue
-                output += marker.as_xacro()
-        # output += self.__suffix
-        autogen = self.empty_file.replace("<!-- OBJECTS -->", output)
-        with open(os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", f"{self.world.name}.urdf.xacro"), "w") as f:
+        if type(frame) is XACROMarker or type(frame) is XACROPlane:
+            output += frame.as_xacro(current_path)
+        for child in frame.children:
+            output += self.flatten(child, current_path)
+        return output
+
+    def export(self, output_filepath: str):
+        # CREATE THE autogen.urdf.xacro
+        autogen = self.empty_file.replace("<!-- OBJECTS -->", self.flatten())
+        with open(output_filepath, "w") as f:
             f.write(autogen)
 
         # CREATE THE OBC
@@ -93,31 +84,109 @@ class XACRO:
             )
         return plane
 
-    def create_world(self):
-        self.world.add_child(
+    def create_module(self, id: int, transform: SE3 = SE3()) -> Frame:
+        module = Frame(name=f"mod{id}", transform=transform)
+        module.add_child(
             self.create_plane(
-                name="p1",
+                name="p" + str(id * 3 + 0),
                 size=np.array([1.0, 1.7, 0.001]),
-                transform=SE3(translation=np.array([1.9, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(0),
+                transform=SE3(translation=np.array([-0.1, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 0),
+            )
+        )
+        module.add_child(
+            self.create_plane(
+                name="p" + str(id * 3 + 1),
+                size=np.array([1.0, 2.0, 0.001]),
+                transform=SE3(translation=np.array([0.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 6),
+            )
+        )
+        module.add_child(
+            self.create_plane(
+                name="p" + str(id * 3 + 2),
+                size=np.array([1.0, 2.0, 0.001]),
+                transform=SE3(translation=np.array([0.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 12),
+            )
+        )
+        return module
+
+    def create_world(self, name: str):
+        self.world.name = name
+        self.world.add_child(
+            self.create_module(
+                0,
+                transform=SE3(
+                    translation=np.array([3.5, 0.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
+                ),
             )
         )
         self.world.add_child(
-            self.create_plane(
-                name="p2",
-                size=np.array([1.0, 2.0, 0.001]),
-                transform=SE3(translation=np.array([2.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(6),
+            self.create_module(
+                1,
+                transform=SE3(
+                    translation=np.array([2.5, 2.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, 45], degrees=True),
+                ),
             )
         )
         self.world.add_child(
-            self.create_plane(
-                name="p3",
-                size=np.array([1.0, 2.0, 0.001]),
-                transform=SE3(translation=np.array([2.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(12),
+            self.create_module(
+                2,
+                transform=SE3(
+                    translation=np.array([0.0, 2.5, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, 90], degrees=True),
+                ),
             )
         )
+        self.world.add_child(
+            self.create_module(
+                3,
+                transform=SE3(
+                    translation=np.array([-2.5, 2.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, 135], degrees=True),
+                ),
+            )
+        )
+        self.world.add_child(
+            self.create_module(
+                4,
+                transform=SE3(
+                    translation=np.array([-3.5, 0.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, 180], degrees=True),
+                ),
+            )
+        )
+        self.world.add_child(
+            self.create_module(
+                5,
+                transform=SE3(
+                    translation=np.array([-2.5, -2.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, -135], degrees=True),
+                ),
+            )
+        )
+        self.world.add_child(
+            self.create_module(
+                6,
+                transform=SE3(
+                    translation=np.array([0.0, -2.5, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, -90], degrees=True),
+                ),
+            )
+        )
+        self.world.add_child(
+            self.create_module(
+                7,
+                transform=SE3(
+                    translation=np.array([2.5, -2.0, 0.0]),
+                    rotation=Rotation.from_euler("xyz", [0, 0, -45], degrees=True),
+                ),
+            )
+        )
+
         print(self.world.as_dataframe(relative_coordinates=False))
 
 
@@ -151,16 +220,20 @@ class XACROPlane(Plane):
     def get_normal(self):
         return self.transform.rotation.apply(np.array([0, 0, 1]))
 
-    def as_xacro(self):
-        euler = self.transform.rotation.as_euler("xyz")
+    def as_xacro(self, path: List[Frame]) -> str:
+        absolute_transform = SE3()
+        for frame in path:
+            absolute_transform = absolute_transform @ frame.transform
+        r = absolute_transform.rotation.as_euler("xyz")
+        t = absolute_transform.translation
         return self.__template.format(
             name=self.name,
-            x=self.transform.translation[0],
-            y=self.transform.translation[1],
-            z=self.transform.translation[2],
-            roll=euler[0],
-            pitch=euler[1],
-            yaw=euler[2],
+            x=t[0],
+            y=t[1],
+            z=t[2],
+            roll=r[0],
+            pitch=r[1],
+            yaw=r[2],
             size_x=self.size[0],
             size_y=self.size[1],
             size_z=self.size[2],
@@ -182,29 +255,33 @@ class XACROMarker(Marker):
     def __init__(self, id: int, name: str, parent: Frame = None, transform: SE3 = SE3()):
         super().__init__(id, name, parent, transform)
 
-    def as_xacro(self) -> str:
-        r = self.parent.transform.rotation.as_euler("xyz")
-        r_marker = self.transform.rotation.as_euler("xyz")
+    def as_xacro(self, path: List[Frame]) -> str:
+        path.pop(-1)
+        absolute_parent_transform = SE3()
+        for frame in path:
+            absolute_parent_transform = absolute_parent_transform @ frame.transform
+        r_parent = absolute_parent_transform.rotation.as_euler("xyz")
+        r = self.transform.rotation.as_euler("xyz")
         return self.__template.format(
             marker_name=self.name,
             marker_id=self.id,
             parent_name=self.parent.name,
-            x=self.parent.transform.translation[0],
-            y=self.parent.transform.translation[1],
-            z=self.parent.transform.translation[2],
-            roll=r[0],
-            pitch=r[1],
-            yaw=r[2],
+            x=absolute_parent_transform.translation[0],
+            y=absolute_parent_transform.translation[1],
+            z=absolute_parent_transform.translation[2],
+            roll=r_parent[0],
+            pitch=r_parent[1],
+            yaw=r_parent[2],
             x_marker=self.transform.translation[0],
             y_marker=self.transform.translation[1],
             z_marker=self.transform.translation[2],
-            roll_marker=r_marker[0],
-            pitch_marker=r_marker[1],
-            yaw_marker=r_marker[2],
+            roll_marker=r[0],
+            pitch_marker=r[1],
+            yaw_marker=r[2],
         )
 
 
 if __name__ == "__main__":
     xacro = XACRO()
-    xacro.create_world()
-    xacro.export()
+    xacro.create_world("autogen")
+    xacro.export(output_filepath=os.path.join(os.getcwd(), "ros2_ws", "src", "simulation", "worlds", f"{xacro.world.name}.urdf.xacro"))
