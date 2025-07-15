@@ -46,24 +46,33 @@ class XACRO:
 
     def __create_9x9_marker_descriptions(self, start_id: int = 0):
         return [
-            (start_id + 0, SE3(translation=np.array([-0.25, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 1, SE3(translation=np.array([0.0, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 2, SE3(translation=np.array([0.25, 0.0, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 3, SE3(translation=np.array([-0.25, 0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 4, SE3(translation=np.array([0.0, 0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 5, SE3(translation=np.array([0.25, 0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 6, SE3(translation=np.array([-0.25, -0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 7, SE3(translation=np.array([0.0, -0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
-            (start_id + 8, SE3(translation=np.array([0.25, -0.25, 0.02]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True))),
+            (start_id + 0, SE3(translation=np.array([-0.25, 0.0, 0.001]))),
+            (start_id + 1, SE3(translation=np.array([0.0, 0.0, 0.001]))),
+            (start_id + 2, SE3(translation=np.array([0.25, 0.0, 0.001]))),
+            (start_id + 3, SE3(translation=np.array([-0.25, 0.25, 0.001]))),
+            (start_id + 4, SE3(translation=np.array([0.0, 0.25, 0.001]))),
+            (start_id + 5, SE3(translation=np.array([0.25, 0.25, 0.001]))),
+            (start_id + 6, SE3(translation=np.array([-0.25, -0.25, 0.001]))),
+            (start_id + 7, SE3(translation=np.array([0.0, -0.25, 0.001]))),
+            (start_id + 8, SE3(translation=np.array([0.25, -0.25, 0.001]))),
+        ]
+
+    def __create_321_marker_descriptions(self, start_id: int = 0):
+        return [
+            (start_id + 0, SE3(translation=np.array([0.25, -0.25, 0.001]))),
+            (start_id + 1, SE3(translation=np.array([0.25, 0.0, 0.001]))),
+            (start_id + 2, SE3(translation=np.array([0.25, 0.25, 0.001]))),
+            (start_id + 3, SE3(translation=np.array([0.0, -0.125, 0.001]))),
+            (start_id + 4, SE3(translation=np.array([0.0, 0.125, 0.001]))),
+            (start_id + 5, SE3(translation=np.array([-0.25, 0.0, 0.001]))),
         ]
 
     def create_plane(
         self,
         name: str,
-        size: np.ndarray = np.array([1, 1, 0.02]),
+        size: np.ndarray = np.array([1, 1, 0.001]),
         transform: SE3 = SE3(),
         marker_descriptions: Tuple[int, SE3] = None,
-        start_id: int = 0,
     ):
         plane = XACROPlane(
             name=name,
@@ -71,8 +80,10 @@ class XACRO:
             size=size,
         )
         if not marker_descriptions:
-            marker_descriptions = self.__create_9x9_marker_descriptions(start_id)
+            marker_descriptions = self.__create_9x9_marker_descriptions()
         for id, marker_transform in marker_descriptions:
+            marker_transform.translation[0] *= size[0]
+            marker_transform.translation[1] *= size[1]
             plane.add_child(
                 XACROMarker(
                     name=f"m{id}",
@@ -86,23 +97,25 @@ class XACRO:
         self.world.add_child(
             self.create_plane(
                 name="p1",
-                size=np.array([1.0, 1.7, 0.02]),
-                transform=SE3(translation=np.array([1.9, 0.0, 1.25]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
-                start_id=0,
+                size=np.array([1.0, 1.7, 0.001]),
+                transform=SE3(translation=np.array([1.9, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(0),
             )
         )
         self.world.add_child(
             self.create_plane(
                 name="p2",
-                transform=SE3(translation=np.array([2.0, 0.4, 1.0]), rotation=Rotation.from_euler("xyz", [0.0, -90.0, 25.0], degrees=True)),
-                start_id=9,
+                size=np.array([1.0, 2.0, 0.001]),
+                transform=SE3(translation=np.array([2.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(6),
             )
         )
         self.world.add_child(
             self.create_plane(
                 name="p3",
-                transform=SE3(translation=np.array([2.0, -0.4, 1.0]), rotation=Rotation.from_euler("xyz", [0.0, -90.0, -25.0], degrees=True)),
-                start_id=18,
+                size=np.array([1.0, 2.0, 0.001]),
+                transform=SE3(translation=np.array([2.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
+                marker_descriptions=self.__create_321_marker_descriptions(12),
             )
         )
         print(self.world.as_dataframe(relative_coordinates=False))
