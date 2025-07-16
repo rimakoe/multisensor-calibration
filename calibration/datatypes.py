@@ -6,6 +6,8 @@ from scipy.spatial.transform import Rotation
 from utils import *
 from PIL import Image
 from pypcd4 import PointCloud
+from typing import Tuple
+import g2opy.g2opy as g2o
 
 
 class SE3:
@@ -48,6 +50,14 @@ class SE3:
         r = self.rotation.as_euler("xyz", degrees=degrees)
         t = self.translation
         return {"x": t[0], "y": t[1], "z": t[2], "roll": r[0], "pitch": r[1], "yaw": r[2]}
+
+    def as_eigen(self) -> g2o.SE3Quat:
+        """
+        The g2o.SE3Quat is a python binding to the standard C++ Eigen library.
+        I like it more to store the rotation as scipy Rotation object since this provides many nice features and is easier to use.
+        Therefore we can just export our type to that binding here.
+        """
+        return g2o.SE3Quat(self.rotation.as_matrix(), self.translation)
 
     def inverse(self):
         return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
@@ -115,6 +125,7 @@ class Frame:
         d = transform.as_dict()
         d.update(
             {
+                "name": frame.name,
                 "depth": depth,
                 "path": "/".join([f.name for f in current_path]),
             }
@@ -182,9 +193,6 @@ class Sensor(Frame):
         super().__init__(name, parent, transform)
         self.data = data
 
-    class Intrinsics:
-        pass  # TODO clarify the camera intrinsics
-
     @classmethod
     def from_dict(self, name: str, data: Solution.SensorDict) -> "Sensor":
         return Sensor(
@@ -219,6 +227,12 @@ class Camera(Sensor):
     TODO
     """
 
+    class Intrinsics:
+        def __init__(self, focal_length: float, principal_point: Tuple[float, float], distortion: np.ndarray = None):
+            self.focal_length = focal_length
+            self.principal_point = principal_point
+            self.distortion = distortion
+
     def __init__(
         self,
         name: str,
@@ -226,9 +240,14 @@ class Camera(Sensor):
         features: pd.DataFrame = None,
         parent: Frame = None,
         transform: SE3 = SE3(),
+        intrinsics: "Intrinsics" = None,
     ):
         super().__init__(name, data, parent, transform)
         self.features = features
+        if not intrinsics:
+            self.intrinsics = Camera.Intrinsics(focal_length=1.0, principal_point=(0.0, 0.0))
+        else:
+            self.intrinsics = intrinsics
 
 
 class Marker(Frame):
@@ -271,5 +290,3 @@ if __name__ == "__main__":
             vehicle.add_child(initial_guess)
 
     print(vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
-
-    # print(world.as_dataframe(only_leafs=False, relative_coordinates=True))

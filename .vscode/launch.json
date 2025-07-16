@@ -10,6 +10,20 @@
             "request": "launch",
             "program": "${workspaceFolder}/calibration/datatypes.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "world_generator",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/world_generator.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "core",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/core.py",
+            "console": "integratedTerminal"
         }
     ]
 }

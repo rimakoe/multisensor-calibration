@@ -1,0 +1,133 @@
+{
+    "devices": {
+        "TopViewCameraFront": {
+            "extrinsics": {
+                "translation": {
+                    "x": 1.0,
+                    "y": 0.0,
+                    "z": 0.3
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
+        },
+        "TopViewCameraLeft": {
+            "extrinsics": {
+                "translation": {
+                    "x": 0.0,
+                    "y": 0.5,
+                    "z": 0.3
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.70710678,
+                    "w": 0.70710678
+                }
+            }
+        },
+        "TopViewCameraRight": {
+            "extrinsics": {
+                "translation": {
+                    "x": 0.0,
+                    "y": -0.5,
+                    "z": 0.3
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": -0.70710678,
+                    "w": 0.70710678
+                }
+            }
+        },
+        "TopViewCameraRear": {
+            "extrinsics": {
+                "translation": {
+                    "x": -1.0,
+                    "y": 0.0,
+                    "z": 0.3
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 1.0,
+                    "w": 0.0
+                }
+            }
+        },
+        "RefLidar": {
+            "extrinsics": {
+                "translation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 1.5
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
+        },
+        "RefLidarFront": {
+            "extrinsics": {
+                "translation": {
+                    "x": 1.0,
+                    "y": 0.0,
+                    "z": 0.8
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
+        }
+    },
+    "objects": {
+        "planes": {
+            "p1": {
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "normal": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                }
+            }
+        },
+        "edges": {},
+        "corners": {
+            "c1": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            }
+        },
+        "modules": {
+            "m1": {
+                "translation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 0.0
+                }
+            }
+        }
+    }
+}
