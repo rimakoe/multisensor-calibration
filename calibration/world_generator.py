@@ -91,7 +91,7 @@ class XACRO:
                 name="p" + str(id * 3 + 0),
                 size=np.array([1.0, 1.7, 0.001]),
                 transform=SE3(translation=np.array([-0.1, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 0),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 18 + 0),
             )
         )
         module.add_child(
@@ -99,7 +99,7 @@ class XACRO:
                 name="p" + str(id * 3 + 1),
                 size=np.array([1.0, 2.0, 0.001]),
                 transform=SE3(translation=np.array([0.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 6),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 18 + 6),
             )
         )
         module.add_child(
@@ -107,7 +107,7 @@ class XACRO:
                 name="p" + str(id * 3 + 2),
                 size=np.array([1.0, 2.0, 0.001]),
                 transform=SE3(translation=np.array([0.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
-                marker_descriptions=self.__create_321_marker_descriptions(id * 12 + 12),
+                marker_descriptions=self.__create_321_marker_descriptions(id * 18 + 12),
             )
         )
         return module

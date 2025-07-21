@@ -62,6 +62,9 @@ class SE3:
     def inverse(self):
         return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
 
+    def apply(self, other: np.ndarray):
+        return self.rotation.as_matrix() @ other + self.translation
+
     def __matmul__(self, other: "SE3") -> "SE3":
         r_new = Rotation.from_matrix(self.rotation.as_matrix() @ other.rotation.as_matrix())
         t_new = self.rotation.apply(other.translation) + self.translation
@@ -202,7 +205,7 @@ class Sensor(Frame):
         )
 
     def __repr__(self):
-        return f"{self.name}\t|\t({self.translation} / {self.rotation.as_euler("xyz", degrees=True)})\n"
+        return f"{self.name}\t|\t({self.transform.translation} | {self.transform.rotation.as_euler("xyz", degrees=True)})\n"
 
 
 class Lidar(Sensor):
@@ -228,10 +231,30 @@ class Camera(Sensor):
     """
 
     class Intrinsics:
-        def __init__(self, focal_length: float, principal_point: Tuple[float, float], distortion: np.ndarray = None):
+        def __init__(self, width: float, height: float, focal_length: np.ndarray, principal_point: np.ndarray, distortion: np.ndarray = None):
+            self.width = width
+            self.height = height
             self.focal_length = focal_length
             self.principal_point = principal_point
             self.distortion = distortion
+
+        @classmethod
+        def from_json(self, filepath: str):
+            config = {}
+            with open(filepath, "r") as f:
+                config = json.load(f)
+            focal_length = np.array([config["K"][0], config["K"][4]])
+            principal_point = np.array([config["K"][2], config["K"][5]])
+            distortion = np.array(config["d"])
+            width = config["width"]
+            height = config["height"]
+            return Camera.Intrinsics(
+                width=width,
+                height=height,
+                focal_length=focal_length,
+                principal_point=principal_point,
+                distortion=distortion,
+            )
 
     def __init__(
         self,
@@ -248,6 +271,7 @@ class Camera(Sensor):
             self.intrinsics = Camera.Intrinsics(focal_length=1.0, principal_point=(0.0, 0.0))
         else:
             self.intrinsics = intrinsics
+        self.id: int = -1
 
 
 class Marker(Frame):
