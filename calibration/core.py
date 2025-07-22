@@ -7,7 +7,7 @@ import json
 
 # TODO 1. feature detection (gather the marker xy coordinates in the image and the plane normals in 3D)
 
-# TODO 2.1 reprojection error minimization
+# 2.1 reprojection error minimization -> Done
 
 # TODO 2.2 plane normal fitting
 
@@ -49,7 +49,7 @@ class OptimizatinProblem:
         output = []
         current_path = path + [frame]
         if type(frame) is Camera:
-            camera_parameter = g2o.CameraParameters(frame.intrinsics.width / (2 * np.tan(np.deg2rad(140) / 2.0)), frame.intrinsics.principal_point, 0)
+            camera_parameter = g2o.CameraParameters(np.mean(frame.intrinsics.focal_length), frame.intrinsics.principal_point, 0)
             camera_parameter.set_id(self.camera_id)
             self.optimizer.add_parameter(camera_parameter)
             frame.id = self.camera_id

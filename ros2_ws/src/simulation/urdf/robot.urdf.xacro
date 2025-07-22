@@ -28,22 +28,22 @@
 
     <xacro:include filename="camera_pinhole_bbox.xacro" />
     <xacro:camera_pinhole_macro name="top_view_camera_front" parent_link="base_link"
-        hfov="140.0" width="640" height="480"
+        hfov="140.0" width="1280" height="960"
         x="1.0" y="0.0" z="0.3"
         roll="0.0" pitch="0.0" yaw="0.0"
     />
     <xacro:camera_pinhole_macro name="top_view_camera_left" parent_link="base_link"
-        hfov="140.0" width="640" height="480"
+        hfov="140.0" width="1280" height="960"
         x="0.0" y="0.5" z="0.3"
         roll="0.0" pitch="0.0" yaw="90"
     />
     <xacro:camera_pinhole_macro name="top_view_camera_right" parent_link="base_link"
-        hfov="140.0" width="640" height="480"
+        hfov="140.0" width="1280" height="960"
         x="0.0" y="-0.5" z="0.3"
         roll="0.0" pitch="0.0" yaw="-90"
     />
     <xacro:camera_pinhole_macro name="top_view_camera_rear" parent_link="base_link"
-        hfov="140.0" width="640" height="480"
+        hfov="140.0" width="1280" height="960"
         x="-1.0" y="0.0" z="0.3"
         roll="0.0" pitch="0.0" yaw="180"
     />
