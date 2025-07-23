@@ -259,6 +259,7 @@ class Camera(Sensor):
     def __init__(
         self,
         name: str,
+        id: int,
         data: Image = None,
         features: pd.DataFrame = None,
         parent: Frame = None,
@@ -266,12 +267,14 @@ class Camera(Sensor):
         intrinsics: "Intrinsics" = None,
     ):
         super().__init__(name, data, parent, transform)
+        assert id >= 1000, "Expecting ID of at least 1000 for a camera for safety when creating g2o graph."
         self.features = features
         if not intrinsics:
             self.intrinsics = Camera.Intrinsics(focal_length=1.0, principal_point=(0.0, 0.0))
         else:
             self.intrinsics = intrinsics
-        self.id: int = -1
+        self.id: int = id
+        self.vertex: g2o.VertexSE3Expmap = None
 
 
 class Marker(Frame):
