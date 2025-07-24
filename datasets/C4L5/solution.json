@@ -59,6 +59,21 @@
                     "w": 0.0
                 }
             }
+        },
+        "RefLidar": {
+            "extrinsics": {
+                "translation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 1.5
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
         }
     },
     "objects": {

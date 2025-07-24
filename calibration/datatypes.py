@@ -63,7 +63,17 @@ class SE3:
         return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
 
     def apply(self, other: np.ndarray):
-        return self.rotation.as_matrix() @ other + self.translation
+        required_columns = ["x", "y", "z"]
+        if type(other) is pd.DataFrame:
+            missing = [required_column for required_column in required_columns if required_column not in other.columns]
+            assert len(missing) == 0, f"missing column(s): {missing}"
+            other = other[required_columns]
+        if other.shape == (3,):
+            return self.rotation.apply(other) + self.translation
+        applied = self.rotation.apply(other) + self.translation
+        if type(other) is pd.DataFrame:
+            return pd.DataFrame(applied, columns=required_columns)
+        return applied
 
     def __matmul__(self, other: "SE3") -> "SE3":
         r_new = Rotation.from_matrix(self.rotation.as_matrix() @ other.rotation.as_matrix())
@@ -155,6 +165,17 @@ class Frame:
                 )
             )
         return rows
+
+    def get_frame(self, name: str, frame: "Frame" = None) -> "Frame":
+        if frame is None:
+            frame = self
+        if name == frame.name:
+            return frame
+        for child in frame.children:
+            result = self.get_frame(name, child)
+            if result:
+                return result
+        return None
 
     def as_dataframe(self, only_leafs: bool = False, relative_coordinates: bool = True, degrees: bool = True) -> pd.DataFrame:
         return pd.DataFrame(self.flatten(only_leafs=only_leafs, relative_coordinates=relative_coordinates, degrees=degrees))
@@ -298,8 +319,30 @@ class Plane(Frame):
     ):
         super().__init__(name, parent, transform)
 
+    @classmethod
+    def from_normal_offset(self, name: str, normal: np.ndarray, offset: np.ndarray, parent: Frame = None):
+        normal /= np.linalg.norm(normal, 2)
+        arbitrary_vector = np.array([0.0, 1.0, 0.0])
+        if np.allclose(normal, arbitrary_vector):
+            arbitrary_vector = np.array([1.0, 0.0, 0.0])
+        z = normal
+        x = np.cross(arbitrary_vector, z)
+        x /= np.linalg.norm(x, 2)
+        y = np.cross(z, x)
+        y /= np.linalg.norm(y, 2)
+        return Plane(name, parent, transform=SE3(rotation=Rotation.from_matrix(np.stack([x, y, z], axis=1)), translation=offset))
+
+    def get_offset(self):
+        return self.transform.translation
+
     def get_normal(self):
         return self.transform.rotation.apply(np.array([0, 0, 1]))
+
+    def as_cartesian(self):
+        raise NotImplementedError("maybe nice to have that as well")
+
+    def get_distance(self, point: np.ndarray):
+        return np.dot(self.get_normal(), point) + self.get_offset()
 
 
 if __name__ == "__main__":
