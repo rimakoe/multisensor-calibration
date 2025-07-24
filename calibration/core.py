@@ -141,14 +141,14 @@ class VehicleFactory:
         return vehicle, solution
 
 
-def fit_plane_ransac(name: str, points: pd.DataFrame) -> Plane:
+def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 1000) -> Plane:
     missing = [required_column for required_column in ["x", "y", "z"] if required_column not in points.columns]
     assert len(missing) == 0, f"missing column(s): {missing}"
     points = points[["x", "y", "z"]]
     best_normal = None
     best_offset = None
     best_number_of_inliers = 0
-    for i in range(1000):
+    for i in range(iterations):
         samples = points.sample(3)
         v1 = samples.iloc[1] - samples.iloc[0]
         v2 = samples.iloc[2] - samples.iloc[0]
@@ -219,6 +219,7 @@ def main(dataset_name: str = "C4L5"):
 
 
 from sklearn.cluster import KMeans
+from sklearn.neighbors import NearestNeighbors
 
 
 def seperate_modules(pointcloud: pd.DataFrame):
@@ -234,7 +235,7 @@ def lidar_calibration():
         "C4L5",
         deviation=SE3(
             rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
-            translation=np.array([0.0, 0.0, 0.0]),
+            translation=np.array([0.1, 0.1, 0.1]),
         ),
     )
     lidar: Lidar = vehicle.get_frame("RefLidar")
@@ -250,30 +251,101 @@ def lidar_calibration():
 
     clusters, new_pointcloud = seperate_modules(pointcloud)
 
-    planes = find_planes(photogrammetry=read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc")))
+    photogrammetry_planes = find_planes(photogrammetry=read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc")))
+    photogrammetry_centroids = [plane.get_offset() for plane in photogrammetry_planes]
+
+    # for cluster in clusters:
+    #    ax.scatter(xs=cluster[0], ys=cluster[1], zs=cluster[2], s=50, marker="x")
+    sensor_planes: List[Plane] = []
+    for label in np.unique(new_pointcloud["label"]):
+        plane = fit_plane_ransac("plane", new_pointcloud[new_pointcloud["label"] == label])
+        sensor_planes.append(plane)
+    sensor_centroids = [plane.get_offset() for plane in sensor_planes]
+
+    optimizer = g2o.SparseOptimizer()
+    optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())))
+
+    vehicle_vertex = g2o.VertexSE3()
+    vehicle_vertex.set_id(0)
+    vehicle_vertex.set_estimate(g2o.Isometry3d())
+    vehicle_vertex.set_fixed(True)
+    optimizer.add_vertex(vehicle_vertex)
+
+    lidar_vertex = g2o.VertexSE3()
+    lidar_vertex.set_id(1)
+    lidar_vertex.set_estimate(g2o.Isometry3d(lidar.parent.transform.rotation.as_matrix(), lidar.parent.transform.translation))
+    lidar_vertex.set_fixed(False)
+    optimizer.add_vertex(lidar_vertex)
+
+    neighbor = NearestNeighbors(n_neighbors=2, radius=0.4, n_jobs=4)
+    neighbor.fit(photogrammetry_centroids)
+    for sensor_idx, photogrammetry_idxs in enumerate(neighbor.kneighbors(sensor_centroids, 2)[1]):
+        print(f"\nSensor: {sensor_idx}")
+        for photogrammetry_idx in photogrammetry_idxs:
+            pplane: Plane = photogrammetry_planes[photogrammetry_idx]
+            splane: Plane = sensor_planes[sensor_idx]
+            print(np.linalg.norm(pplane.get_offset() - splane.get_offset(), 2))
+
+            normal0 = pplane.get_normal()
+            if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) > np.linalg.norm(pplane.get_offset(), 2):
+                normal0 *= -1.0
+
+            normal1 = splane.get_normal()
+            if np.linalg.norm(splane.get_offset() + normal1 * 0.1, 2) > np.linalg.norm(splane.get_offset(), 2):
+                normal1 *= -1.0
+
+            measurement = g2o.EdgeGICP()
+            measurement.normal0 = normal0
+            measurement.pos0 = pplane.get_offset()
+            measurement.normal1 = normal1
+            measurement.pos1 = splane.get_offset()
+
+            edge = g2o.EdgeVVGicp()
+            edge.set_vertex(0, vehicle_vertex)
+            edge.set_vertex(1, lidar_vertex)
+            edge.set_measurement(measurement)
+            edge.set_information(np.linalg.inv(np.eye(3)))
+            optimizer.add_edge(edge)
+            break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
+
+    optimizer.initialize_optimization()
+    optimizer.set_verbose(True)
+    optimizer.optimize(100)
+
+    lidar.transform = SE3(
+        rotation=Rotation.from_matrix(optimizer.vertex(1).estimate().rotation().matrix()),
+        translation=optimizer.vertex(1).estimate().translation(),
+    )
+    print(lidar)
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    for plane in planes:
+
+    # draw photogrammetry normals
+    for plane in photogrammetry_planes:
         normal = plane.get_normal()
         offset = plane.get_offset()
         if np.linalg.norm(offset + normal * 0.1, 2) > np.linalg.norm(offset, 2):
             normal *= -1.0
         ax.quiver(offset[0], offset[1], offset[2], normal[0], normal[1], normal[2], length=0.5)
-    # for cluster in clusters:
-    #    ax.scatter(xs=cluster[0], ys=cluster[1], zs=cluster[2], s=50, marker="x")
-    for label in np.unique(new_pointcloud["label"]):
-        plane = fit_plane_ransac("plane", new_pointcloud[new_pointcloud["label"] == label])
+
+    # draw sensor normals
+    for plane in sensor_planes:
+        plane.transform = lidar.transform @ plane.transform
         offset = plane.get_offset()
         normal = plane.get_normal()
         if np.linalg.norm(offset + normal * 0.1, 2) > np.linalg.norm(offset, 2):
             normal *= -1.0
         ax.quiver(offset[0], offset[1], offset[2], normal[0], normal[1], normal[2], length=0.5, color="red")
+
+    # draw scatter
+    for label in np.unique(new_pointcloud["label"]):
         ax.scatter(
             xs=new_pointcloud[new_pointcloud["label"] == label]["x"][0:-1:10],
             ys=new_pointcloud[new_pointcloud["label"] == label]["y"][0:-1:10],
             zs=new_pointcloud[new_pointcloud["label"] == label]["z"][0:-1:10],
         )
+
     ax.set_aspect("equal")
     plt.show(block=True)
 

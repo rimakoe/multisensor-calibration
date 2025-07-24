@@ -20,6 +20,9 @@ class SE3:
         rotation: Rotation = Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
         translation: np.ndarray = np.array([0.0, 0.0, 0.0]),
     ):
+        assert type(rotation) is Rotation, "rotation is expected to be scipy Rotation object"
+        assert type(translation) is np.ndarray, "translation is expected to be a numpy array"
+        assert translation.shape == (3, 1) or translation.shape == (3,), "translation is expected to be a vector with 3 entries"
         self.rotation = rotation
         self.translation = translation
 
