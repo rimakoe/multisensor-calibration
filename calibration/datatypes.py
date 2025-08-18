@@ -292,6 +292,7 @@ class Lidar(Sensor):
     def __init__(
         self,
         name: str,
+        id: int,
         data: PointCloud = None,
         features: List[Plane] = None,
         parent: Frame = None,
@@ -299,6 +300,8 @@ class Lidar(Sensor):
         intrinsics: Intrinsics = None,
     ):
         super().__init__(name, data, parent, transform)
+        assert id >= 1000, "Expecting ID of at least 1000 for a camera for safety when creating g2o graph."
+        self.id = id
         self.features = features
 
 

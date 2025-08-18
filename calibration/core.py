@@ -3,6 +3,8 @@ from utils import *
 import g2opy.g2opy as g2o
 import json
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.neighbors import NearestNeighbors
 
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
@@ -13,18 +15,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.set_algorithm(algorithm)
         self.vehicle = vehicle
         self.__convention_transform = SE3(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
-
-    def add_frame(self, frame: Frame):
-        raise NotImplementedError("Not implemented")
-
-    def add_characteristic_points(self):
-        raise NotImplementedError("Not implemented")
-
-    def add_edge_minimization(self):
-        raise NotImplementedError("Not implemented")
-
-    def add_gicp(self):
-        raise NotImplementedError("Not implemented")
 
     def add_photogrammetry(self, photogrammetry: pd.DataFrame):
         for _, row in photogrammetry.iterrows():
@@ -42,11 +32,14 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         if type(frame) is Camera:
             self.add_reprojection_error_minimization(frame)
             return
+        if type(frame) is Lidar:
+            self.add_point_to_plane_error_minimization(frame)
+            return
         for child in frame.children:
             self.add_sensors(child)
         return
 
-    def add_reprojection_error_minimization(self, camera: Camera):
+    def add_reprojection_error_minimization(self, camera: Camera) -> None:
         camera_parameter = g2o.CameraParameters(np.mean(camera.intrinsics.focal_length), camera.intrinsics.principal_point, 0)
         camera_parameter.set_id(camera.id)
         self.add_parameter(camera_parameter)
@@ -58,6 +51,20 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.add_vertex(vertex)
         camera.vertex = vertex
 
+        # Try to make the result relative, but the edge does not care. For this to work the photogrammetrty vertices need to be transformed in sensor coordinates. Since this makes not too much sense we leave it like this.
+        # init_vertex = g2o.VertexSE3Expmap()
+        # init_vertex.set_id(camera.id + 100)
+        # init_vertex.set_fixed(True)
+        # init_vertex.set_estimate((camera.parent.transform @ self.__convention_transform).inverse().as_eigen())
+        # self.add_vertex(init_vertex)
+
+        # edge = g2o.EdgeSE3Expmap()
+        # edge.set_vertex(0, init_vertex)
+        # edge.set_vertex(1, vertex)
+        # edge.set_measurement(g2o.SE3Quat())
+        # edge.set_id(camera.id * 1000 + 900)
+        # self.add_edge(edge)
+
         for _, row in camera.features.iterrows():
             marker_id: int = int(row["id"])
             sigma = 1.0  # TODO integrate uncertainty
@@ -67,12 +74,84 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             edge.set_measurement(row[["x", "y"]].to_numpy())
             edge.set_information(np.identity(2) / (sigma**2))  # no effect right now
             edge.set_parameter_id(0, camera.id)
-            edge.set_id(camera.id + marker_id * 10)
+            edge.set_id(camera.id * 1000 + marker_id * 10)
             self.add_edge(edge)
+
+    def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
+        # TODO this is calculated for every lidar, make this only once outside somewhere
+        photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
+        photogrammetry_planes: List[Plane] = []
+        counter = 0
+        cache = []
+        for _, row in photogrammetry.iterrows():
+            counter += 1
+            cache.append(row)
+            if counter % 6 == 0:
+                photogrammetry_planes.append(fit_plane("plane", pd.concat(cache, axis=1).T))
+                counter = 0
+                cache = []
+        photogrammetry_centroids = [plane.get_offset() for plane in photogrammetry_planes]
+
+        initial_guess_vertex = g2o.VertexSE3()
+        initial_guess_vertex.set_id(999)
+        initial_guess_vertex.set_estimate(g2o.Isometry3d())
+        initial_guess_vertex.set_fixed(True)
+        self.add_vertex(initial_guess_vertex)
+
+        lidar_vertex = g2o.VertexSE3()
+        lidar_vertex.set_id(lidar.id)
+        lidar_vertex.set_estimate(g2o.Isometry3d())
+        lidar_vertex.set_fixed(False)
+        self.add_vertex(lidar_vertex)
+
+        neighbor = NearestNeighbors(n_neighbors=2, radius=0.4, n_jobs=4)
+        neighbor.fit(photogrammetry_centroids)
+
+        # only for groundtruth hack
+        deviation = SE3(
+            rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
+            translation=np.array([0.1, 0.1, 0.1]),
+        )
+
+        for sensor_idx, photogrammetry_idxs in enumerate(neighbor.kneighbors([plane.get_offset() for plane in lidar.features], 2)[1]):
+            for photogrammetry_idx in photogrammetry_idxs:
+                pplane: Plane = photogrammetry_planes[photogrammetry_idx]
+                splane: Plane = lidar.features[sensor_idx]
+
+                # splane.transform = deviation @ pplane.transform  # HACK for absolute groundtruth matching here to check if solver converges
+
+                normal0 = pplane.get_normal()
+                if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) > np.linalg.norm(pplane.get_offset(), 2):
+                    normal0 *= -1.0
+
+                normal1 = splane.get_normal()
+                if np.linalg.norm(splane.get_offset() + normal1 * 0.1, 2) > np.linalg.norm(splane.get_offset(), 2):
+                    normal1 *= -1.0
+
+                measurement = g2o.EdgeGICP()
+                measurement.normal0 = normal0
+                measurement.pos0 = pplane.get_offset()
+                measurement.normal1 = normal1
+                measurement.pos1 = splane.get_offset()
+                measurement.prec0(0.01)
+                measurement.prec1(0.01)
+
+                edge = g2o.EdgeVVGicp()
+                edge.set_id(lidar.id * 1000 + photogrammetry_idx)
+                edge.set_vertex(0, initial_guess_vertex)
+                edge.set_vertex(1, lidar_vertex)
+                edge.set_measurement(measurement)
+                edge.set_information(np.linalg.inv(np.eye(3) / 0.01))
+                edge.set_robust_kernel(g2o.RobustKernelHuber(0.01))
+                self.add_edge(edge)
+                break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
 
     def __integrate_result(self, frame: Frame, id, result: SE3):
         if type(frame) is Camera and frame.id == id:
-            frame.transform = frame.parent.transform.inverse() @ result @ self.__convention_transform.inverse()
+            frame.transform = frame.parent.transform.inverse() @ (result.inverse() @ self.__convention_transform.inverse())
+            return
+        if type(frame) is Lidar and frame.id == id:
+            frame.transform = result
             return
         for child in frame.children:
             self.__integrate_result(child, id, result)
@@ -80,12 +159,12 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
     def optimize(self, iterations=1000):
         super().optimize(iterations)
         for id, vertex in self.vertices().items():
-            if type(vertex) is not g2o.VertexSE3Expmap:
+            if type(vertex) is not g2o.VertexSE3Expmap and type(vertex) is not g2o.VertexSE3:
                 continue
             if id >= 1000 and id < 2000:
                 result = SE3(
-                    translation=vertex.estimate().inverse().translation(),
-                    rotation=Rotation.from_matrix(vertex.estimate().inverse().rotation().matrix()),
+                    translation=vertex.estimate().translation(),
+                    rotation=Rotation.from_matrix(vertex.estimate().rotation().matrix()),
                 )
                 self.__integrate_result(self.vehicle, id, result)
 
@@ -107,18 +186,47 @@ class VehicleFactory:
         solution_filepath = os.path.join(self.directory_to_datasets, dataset_name, "solution.json")
         solution = Solution(**json.load(open(solution_filepath)))
         vehicle = Vehicle(name="Vehicle", system_configuration=dataset_name)
-        camera_id = 1000
+        sensor_id = 1000
         for name, data in solution.devices.items():
             initial_guess = Frame(name="InitialGuess", transform=SE3.from_dict(data.extrinsics) @ deviation)
             sensor_folder = os.path.join(self.directory_to_datasets, dataset_name, name.lower())
             if "lidar" in name.lower():
+                # read the pcd
+                data = PointCloud.from_path(os.path.join(sensor_folder, name.lower() + ".pcd"))
+                # crop the pointcloud roughly
+                pointcloud = pd.DataFrame(data.pc_data)
+                pointcloud = pointcloud[np.isfinite(pointcloud).all(1)]
+                pointcloud.dropna()
+                pointcloud = initial_guess.transform.apply(pointcloud)  # transform data using the initial guess
+                pointcloud = pointcloud[pointcloud["z"] > 0.5]
+                pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) < 5.0]
+                pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) > 2.0]
+                # cluster the modules
+                kmeans = KMeans(n_clusters=8, random_state=0, n_init="auto").fit(pointcloud[["x", "y", "z"]].to_numpy())
+                pointcloud["label"] = kmeans.labels_
+                # find the planes
+                features: List[Plane] = []
+                for label in np.unique(pointcloud["label"]):
+                    module_pointcloud = pointcloud[pointcloud["label"] == label]
+                    plane, inlier = fit_plane_ransac("plane", module_pointcloud)
+                    features.append(plane)
+                    module_pointcloud = module_pointcloud[~inlier]
+                    plane, inlier = fit_plane_ransac("plane", module_pointcloud)
+                    features.append(plane)
+                    module_pointcloud = module_pointcloud[~inlier]
+                    plane, inlier = fit_plane_ransac("plane", module_pointcloud)
+                    features.append(plane)
+
                 initial_guess.add_child(
                     Lidar(
                         name=name,
-                        data=PointCloud.from_path(os.path.join(sensor_folder, name.lower() + ".pcd")),
+                        id=sensor_id,
+                        data=data,
+                        features=features,
                     )
                 )
                 vehicle.add_child(initial_guess)
+                sensor_id += 1
             if "camera" in name.lower():
                 features = pd.DataFrame.from_dict(
                     json.load(open(os.path.join(sensor_folder, "detections.json"))),
@@ -128,7 +236,7 @@ class VehicleFactory:
                 initial_guess.add_child(
                     Camera(
                         name=name,
-                        id=camera_id,
+                        id=sensor_id,
                         data=Image.open(os.path.join(sensor_folder, name.lower() + ".bmp")),
                         intrinsics=Camera.Intrinsics.from_json(
                             os.path.join(sensor_folder, "camera_info.json"),
@@ -137,7 +245,7 @@ class VehicleFactory:
                     )
                 )
                 vehicle.add_child(initial_guess)
-                camera_id += 1
+                sensor_id += 1
         return vehicle, solution
 
 
@@ -163,7 +271,8 @@ def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 1000) ->
             best_number_of_inliers = len(distances[inlier])
             best_normal = normal
             best_offset = np.median(points[inlier], axis=0)
-    return Plane.from_normal_offset(name, best_normal, best_offset), best_inlier
+    # finish the plane estimation with a actual analytic regression
+    return fit_plane(name, points[best_inlier]), best_inlier
 
 
 def fit_plane(name: str, points) -> Plane:
@@ -181,28 +290,14 @@ def fit_plane(name: str, points) -> Plane:
     return Plane.from_normal_offset(name=name, normal=normal, offset=centroid)
 
 
-def find_planes(photogrammetry: pd.DataFrame) -> List[Plane]:
-    planes: List[Plane] = []
-    counter = 0
-    cache = []
-    for _, row in photogrammetry.iterrows():
-        counter += 1
-        cache.append(row)
-        if counter % 6 == 0:
-            planes.append(fit_plane("plane", pd.concat(cache, axis=1).T))
-            counter = 0
-            cache = []
-    return planes
-
-
 def main(dataset_name: str = "C4L5"):
     directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
     factory = VehicleFactory(directory_to_datasets)
     vehicle, solution = factory.create(
         dataset_name,
         deviation=SE3(
-            rotation=Rotation.from_euler("xyz", [3, 2, 1], degrees=True),
-            translation=np.array([0.5, 0.5, 1.0]),
+            rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
+            translation=np.array([0.1, 0.1, 0.1]),
         ),
     )
     optimizer = ExtendedSparseOptimizer(
@@ -218,10 +313,6 @@ def main(dataset_name: str = "C4L5"):
     print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
 
     return vehicle, {}
-
-
-from sklearn.cluster import KMeans
-from sklearn.neighbors import NearestNeighbors
 
 
 def lidar_calibration():
@@ -249,7 +340,17 @@ def lidar_calibration():
     kmeans = KMeans(n_clusters=8, random_state=0, n_init="auto").fit(pointcloud[["x", "y", "z"]].to_numpy())
     pointcloud["label"] = kmeans.labels_
     new_pointcloud = pointcloud
-    photogrammetry_planes = find_planes(photogrammetry=read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc")))
+    photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
+    photogrammetry_planes: List[Plane] = []
+    counter = 0
+    cache = []
+    for _, row in photogrammetry.iterrows():
+        counter += 1
+        cache.append(row)
+        if counter % 6 == 0:
+            photogrammetry_planes.append(fit_plane("plane", pd.concat(cache, axis=1).T))
+            counter = 0
+            cache = []
     photogrammetry_centroids = [plane.get_offset() for plane in photogrammetry_planes]
 
     sensor_planes: List[Plane] = []
@@ -364,5 +465,4 @@ def lidar_calibration():
 
 
 if __name__ == "__main__":
-    lidar_calibration()
-    # vehicle, report = main()
+    vehicle, report = main()
