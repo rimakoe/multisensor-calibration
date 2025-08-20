@@ -9,7 +9,7 @@ import tqdm
 
 # only for groundtruth hack
 deviation = SE3(
-    rotation=Rotation.from_euler("xyz", [3, 3, 3], degrees=True),
+    rotation=Rotation.from_euler("xyz", [1, 2, 3], degrees=True),
     translation=np.array([0.1, 0.1, 0.1]),
 )
 
@@ -37,7 +37,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         if frame is None:
             frame = self.vehicle
         if type(frame) is Camera:
-            # self.add_reprojection_error_minimization(frame)
+            self.add_reprojection_error_minimization(frame)
             return
         if type(frame) is Lidar:
             self.add_point_to_plane_error_minimization(frame)
@@ -85,6 +85,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
+        sensor_noise = 0.01  # m - sigma gaussian noise of the sensor in ray direction
         # TODO this is calculated for every lidar, make this only once outside somewhere
         photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
         photogrammetry_planes: List[Plane] = []
@@ -103,11 +104,11 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         offset.set_id(0)
         self.add_parameter(offset)
 
-        initial_guess_vertex = g2o.VertexSE3()
-        initial_guess_vertex.set_id(lidar.id + 100)
-        initial_guess_vertex.set_estimate(g2o.Isometry3d())
-        initial_guess_vertex.set_fixed(True)
-        self.add_vertex(initial_guess_vertex)
+        vehicle_vertex = g2o.VertexSE3()
+        vehicle_vertex.set_id(lidar.id + 100)
+        vehicle_vertex.set_estimate(g2o.Isometry3d())
+        vehicle_vertex.set_fixed(True)
+        self.add_vertex(vehicle_vertex)
 
         lidar_vertex = g2o.VertexSE3()
         lidar_vertex.set_id(lidar.id)
@@ -143,15 +144,17 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
         for sensor_idx, photogrammetry_idxs in enumerate(neighbor.kneighbors([plane.get_offset() for plane in lidar.features], 2)[1]):
             for photogrammetry_idx in photogrammetry_idxs:
+                # Get corresponding planes and transform them into sensor coordinates using the initial guess to optimize relative to the initial guess
                 pplane: Plane = photogrammetry_planes[photogrammetry_idx]
+                pplane.transform = lidar.parent.transform.inverse() @ pplane.transform
                 splane: Plane = lidar.features[sensor_idx]
-
-                splane.transform.translation = (
-                    deviation @ pplane.transform
-                ).translation  # HACK for absolute groundtruth matching here to check if solver converges
-                splane.transform.rotation = (
-                    deviation @ pplane.transform
-                ).rotation  # HACK for absolute groundtruth matching here to check if solver converges
+                splane.transform = lidar.parent.transform.inverse() @ splane.transform
+                # splane.transform.translation = (
+                #     deviation @ pplane.transform
+                # ).translation  # HACK for absolute groundtruth matching here to check if solver converges
+                # splane.transform.rotation = (
+                #     deviation @ pplane.transform
+                # ).rotation  # HACK for absolute groundtruth matching here to check if solver converges
 
                 normal0 = pplane.get_normal()
                 if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) < np.linalg.norm(pplane.get_offset(), 2):
@@ -163,20 +166,22 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
                 measurement = g2o.EdgeGICP()
                 measurement.normal0 = normal0
+                # measurement.pos0 = pplane.get_offset()
                 measurement.pos0 = np.dot(pplane.get_offset(), normal0) * normal0
                 measurement.normal1 = normal1
+                # measurement.pos1 = splane.get_offset()
                 measurement.pos1 = np.dot(splane.get_offset(), normal1) * normal1
                 # measurement.prec0(0.000001)
                 # measurement.prec1(0.000001)
 
                 edge = g2o.EdgeVVGicp()
                 edge.set_id(lidar.id * 1000 + photogrammetry_idx)
-                edge.set_vertex(0, initial_guess_vertex)
+                edge.set_vertex(0, vehicle_vertex)
                 edge.set_vertex(1, lidar_vertex)
                 edge.set_measurement(measurement)
-                edge.set_information(np.linalg.inv(np.eye(3) / (0.01**2)))
-                # edge.set_robust_kernel(g2o.RobustKernelHuber(0.01))
-                # self.add_edge(edge)
+                edge.set_information(np.outer(normal1, normal1) / (sensor_noise**2))
+                edge.set_robust_kernel(g2o.RobustKernelHuber(sensor_noise))
+                self.add_edge(edge)
 
                 vertex_point = g2o.VertexPointXYZ()
                 vertex_point.set_estimate(np.dot(pplane.get_offset(), normal0) * normal0)
@@ -190,8 +195,8 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 edge_xyz.set_vertex(1, vertex_point)
                 edge_xyz.set_measurement(np.dot(splane.get_offset(), normal1) * normal1)
                 edge_xyz.set_parameter_id(0, 0)
-                edge_xyz.set_information(np.outer(normal1, normal1))
-                # edge_xyz.set_robust_kernel(g2o.RobustKernelHuber(0.01))
+                edge_xyz.set_information(np.outer(normal1, normal1) / (sensor_noise**2))
+                edge_xyz.set_robust_kernel(g2o.RobustKernelHuber(sensor_noise))
                 self.add_edge(edge_xyz)
 
                 break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
@@ -240,7 +245,7 @@ class VehicleFactory:
         for name, data in solution.devices.items():
             initial_guess = Frame(name="InitialGuess", transform=SE3.from_dict(data.extrinsics) @ deviation)
             sensor_folder = os.path.join(self.directory_to_datasets, dataset_name, name.lower())
-            if "lidar" in name.lower() and not "front" in name.lower():
+            if "lidar" in name.lower():
                 # read the pcd
                 data = PointCloud.from_path(os.path.join(sensor_folder, name.lower() + ".pcd"))
                 # crop the pointcloud roughly
@@ -252,8 +257,6 @@ class VehicleFactory:
                 pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) < 5.0]
                 pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) > 2.0]
                 # cluster the modules
-                # kmeans = KMeans(n_clusters=8, random_state=0, n_init="auto").fit(pointcloud[["x", "y", "z"]].to_numpy())
-                # pointcloud["label"] = kmeans.labels_
                 db = DBSCAN(eps=0.3, min_samples=20).fit(pointcloud)
                 pointcloud["label"] = db.labels_
 
