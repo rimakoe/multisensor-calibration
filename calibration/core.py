@@ -8,6 +8,7 @@ from sklearn.neighbors import NearestNeighbors
 import tqdm
 from plots import *
 from scipy.stats import chi2
+import seaborn as sns
 
 
 # only for groundtruth hack
@@ -89,7 +90,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
-        feature_noise = 0.002  # m - sigma gaussian noise of the sensor in ray direction
+        feature_noise = 0.0025  # m - sigma gaussian noise of the sensor in ray direction
         # TODO this is calculated for every lidar, make this only once outside somewhere
         photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
         photogrammetry_planes: List[Plane] = []
@@ -151,15 +152,14 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 # Get corresponding planes and transform them into sensor coordinates using the initial guess to optimize relative to the initial guess
                 pplane: Plane = photogrammetry_planes[photogrammetry_idx]
                 splane: Plane = lidar.features[sensor_idx]
+                splane.transform = lidar.parent.transform.inverse() @ splane.transform
+                pplane.transform = lidar.parent.transform.inverse() @ pplane.transform
                 # splane.transform.translation = (
                 #    deviation @ pplane.transform
                 # ).translation  # HACK for absolute groundtruth matching here to check if solver converges
                 # splane.transform.rotation = (
                 #    deviation @ pplane.transform
                 # ).rotation  # HACK for absolute groundtruth matching here to check if solver converges
-                splane.transform = lidar.parent.transform.inverse() @ splane.transform
-                pplane.transform = lidar.parent.transform.inverse() @ pplane.transform
-
                 normal0 = pplane.get_normal()
                 if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) < np.linalg.norm(pplane.get_offset(), 2):
                     normal0 *= -1.0
@@ -208,12 +208,22 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             frame.transform = frame.parent.transform.inverse() @ result.inverse() @ self._convention_transform.inverse()
             frame.transform.covariance = result.covariance
             print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
-            plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
+            sns.heatmap(
+                pd.DataFrame(
+                    frame.transform.covariance * 10e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
+                ),
+                annot=True,
+                center=0.0,
+                cmap="seismic",
+                fmt=".2f",
+            )
+            plt.show(block=True)
+            # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         if type(frame) is Lidar and frame.id == id:
             frame.transform = result
             print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
-            plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
+            # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         for child in frame.children:
             self._integrate_result(child, id, result)
@@ -408,6 +418,7 @@ def main(dataset_name: str = "C4L5"):
         status = "chi2 looks suspicously low. Maybe the your expected uncertainty for the data is too high!"
     if optimizer.active_chi2() > ub:
         status = "chi2 looks suspicously high. Maybe the your expected uncertainty for the data is too low!"
+    number_of_sensors = 6
     report = {
         "robust_active_chi2": optimizer.active_robust_chi2(),
         "active_chi2": optimizer.active_chi2(),
@@ -415,8 +426,11 @@ def main(dataset_name: str = "C4L5"):
         # "mean": mean,
         # "std": std,
         # "boundaries": [lb, ub],
-        "active_chi2_normed": optimizer.active_chi2() / mean - 1.0,  # you want this to be close to 1
-        "sigma_normed": std / mean,
+        "active_chi2_normed": (optimizer.active_chi2() - mean) / std,  # you want this to be close to 1
+        # "sigma_normed": 1.0,
+        "skew": skew,
+        "kurtosis": kurtosis,
+        "p-value": chi2.sf(optimizer.active_chi2(), df=len(optimizer.edges())),
         "status": status,
     }
     print("")
@@ -427,6 +441,29 @@ def main(dataset_name: str = "C4L5"):
     print("============================================================")
     print("")
 
+    # gather distributions
+
+    # reproject_error_minimization distribution
+    residuals = []
+    camera_ids = []
+    marker_ids = []
+    for edge in optimizer.edges():
+        if type(edge) is g2o.EdgeProjectXYZ2UV:
+            residuals.append(edge.chi2() - 1.0)
+            marker_ids.append(edge.vertex(0).id())
+            camera_ids.append(edge.vertex(1).id())
+    df = pd.DataFrame(
+        {
+            "camera id": camera_ids,
+            "marker id": marker_ids,
+            "residuals": residuals,
+        }
+    )
+    # df.boxplot(column="residuals", by="camera id")
+    # fig, axes = plt.subplots()
+    sns.violinplot(data=df, x="camera id", y="residuals", inner="point")
+    # sns.swarmplot(data=df, x="camera id", y="residuals")
+    plt.show(block=True)
     return vehicle, report
 
 
