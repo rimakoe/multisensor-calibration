@@ -16,6 +16,12 @@ deviation = SE3(
     rotation=Rotation.from_euler("xyz", [3, 3, 3], degrees=True),
     translation=np.array([0.1, 0.1, 0.1]),
 )
+# deviation = SE3(
+#    rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
+#    translation=np.array([0.0, 0.0, 0.0]),
+# )
+
+camera_feature_noise = 1.0  # TODO integrate uncertainty here
 
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
@@ -78,15 +84,14 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
         for _, row in camera.features.iterrows():
             marker_id: int = int(row["id"])
-            feature_noise = 0.3  # TODO integrate uncertainty here
             edge = g2o.EdgeProjectXYZ2UV()
             edge.set_vertex(0, self.vertex(marker_id))
             edge.set_vertex(1, self.vertex(camera.id))
             edge.set_measurement(row[["x", "y"]].to_numpy())
-            edge.set_information(np.identity(2) / (feature_noise**2))  # no effect right now
+            edge.set_information(np.identity(2) / (camera_feature_noise**2))  # no effect right now
             edge.set_parameter_id(0, camera.id)
             edge.set_id(camera.id * 1000 + marker_id * 10)
-            # edge.set_robust_kernel(g2o.RobustKernelHuber(3 * feature_noise))
+            # edge.set_robust_kernel(g2o.RobustKernelHuber(3 * camera_feature_noise))
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
@@ -207,17 +212,17 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         if type(frame) is Camera and frame.id == id:
             frame.transform = frame.parent.transform.inverse() @ result.inverse() @ self._convention_transform.inverse()
             frame.transform.covariance = result.covariance
-            print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
-            sns.heatmap(
-                pd.DataFrame(
-                    frame.transform.covariance * 10e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
-                ),
-                annot=True,
-                center=0.0,
-                cmap="seismic",
-                fmt=".2f",
-            )
-            plt.show(block=True)
+            # print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
+            # sns.heatmap(
+            #    pd.DataFrame(
+            #        frame.transform.covariance * 10e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
+            #    ),
+            #    annot=True,
+            #    center=0.0,
+            #    cmap="seismic",
+            #    fmt=".2f",
+            # )
+            # plt.show(block=True)
             # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         if type(frame) is Lidar and frame.id == id:
@@ -327,8 +332,9 @@ class VehicleFactory:
                 features = pd.DataFrame.from_dict(
                     json.load(open(os.path.join(sensor_folder, "detections.json"))),
                 )
-                features["x"] += 0.5
-                features["y"] += 0.5
+                features[["x", "y"]] += np.random.normal(0.0, camera_feature_noise, size=features[["x", "y"]].shape)
+                features["x"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                features["y"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 initial_guess.add_child(
                     Camera(
                         name=name,
@@ -389,7 +395,7 @@ def fit_plane(name: str, points) -> Plane:
     return Plane.from_normal_offset(name=name, normal=normal, offset=centroid)
 
 
-def main(dataset_name: str = "C4L5"):
+def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
     directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
     factory = VehicleFactory(directory_to_datasets)
     vehicle, solution = factory.create(
@@ -406,64 +412,85 @@ def main(dataset_name: str = "C4L5"):
     optimizer.set_verbose(False)
     optimizer.optimize(10000)
 
-    print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
+    if not silent:
+        print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
 
-    mean, variance, skew, kurtosis = chi2.stats(df=len(optimizer.edges()), moments="mvsk")
-    std = np.sqrt(variance)
-    lb = mean - std
-    ub = mean + std
-    if np.abs(optimizer.active_chi2() - mean) < std:
-        status = "chi2 looks reasonable, you can trust the hessian and the uncertainty weights seem to fit the data"
-    if optimizer.active_chi2() < lb:
-        status = "chi2 looks suspicously low. Maybe the your expected uncertainty for the data is too high!"
-    if optimizer.active_chi2() > ub:
-        status = "chi2 looks suspicously high. Maybe the your expected uncertainty for the data is too low!"
-    number_of_sensors = 6
+    dof = 0
+    for edge in optimizer.edges():
+        if type(edge) is g2o.EdgeProjectXYZ2UV:
+            dof += 2
+        if type(edge) is g2o.EdgeVVGicp:
+            dof += 3
+    for id, vertex in optimizer.vertices().items():
+        if vertex.fixed():
+            continue
+        if type(vertex) is g2o.VertexSE3Expmap or type(vertex) is g2o.VertexSE3:
+            dof -= 6
+    assert dof >= 0, "There is not DOF for a unique result"
+    active_chi2 = optimizer.active_chi2()
+    robust_chi2 = optimizer.active_robust_chi2()
+    mean, variance, skew, kurtosis = chi2.stats(df=dof, moments="mvsk")
+    p_value = chi2.sf(active_chi2, df=dof)
+    global_test_comment = "OK - a priori estimates seem to align with the optimization result"
+    if p_value < 0.05:
+        global_test_comment = "FAILED - a priori sensor noise seems to be too low"
+    if p_value > 0.95:
+        global_test_comment = "FAILED - a priori sensor noise seems to be too high"
     report = {
-        "robust_active_chi2": optimizer.active_robust_chi2(),
-        "active_chi2": optimizer.active_chi2(),
-        # "number of edges": len(optimizer.edges()),
-        # "mean": mean,
-        # "std": std,
-        # "boundaries": [lb, ub],
-        "active_chi2_normed": (optimizer.active_chi2() - mean) / std,  # you want this to be close to 1
-        # "sigma_normed": 1.0,
+        "robust chi2": robust_chi2,
+        "active chi2": active_chi2,
+        "kernel quotient": 1.0 - active_chi2 / robust_chi2,
+        "number of edges": len(optimizer.edges()),
+        "dof": dof,
+        "reduced chi2": active_chi2 / dof,  # you want this to be close to 1
+        "reduced sigma": np.sqrt(2 / dof),
         "skew": skew,
         "kurtosis": kurtosis,
-        "p-value": chi2.sf(optimizer.active_chi2(), df=len(optimizer.edges())),
-        "status": status,
+        "p-value": p_value,
+        "chi2 global test": global_test_comment,
     }
-    print("")
-    print("========================== REPORT ==========================")
-    print("")
-    [print("{0:25} {1}".format(key, value)) for key, value in report.items()]
-    print("")
-    print("============================================================")
-    print("")
+    if not silent:
+        print("")
+        print("========================== REPORT ==========================")
+        print("")
+        [print("{0:25} {1}".format(key, value)) for key, value in report.items()]
+        print("")
+        print("============================================================")
+        print("")
 
     # gather distributions
 
     # reproject_error_minimization distribution
-    residuals = []
+    xs = []
+    ys = []
     camera_ids = []
     marker_ids = []
     for edge in optimizer.edges():
         if type(edge) is g2o.EdgeProjectXYZ2UV:
-            residuals.append(edge.chi2() - 1.0)
+            xs.append(edge.error()[0])
+            ys.append(edge.error()[1])
             marker_ids.append(edge.vertex(0).id())
             camera_ids.append(edge.vertex(1).id())
     df = pd.DataFrame(
         {
             "camera id": camera_ids,
             "marker id": marker_ids,
-            "residuals": residuals,
+            "x": xs,
+            "y": ys,
         }
     )
     # df.boxplot(column="residuals", by="camera id")
     # fig, axes = plt.subplots()
-    sns.violinplot(data=df, x="camera id", y="residuals", inner="point")
-    # sns.swarmplot(data=df, x="camera id", y="residuals")
-    plt.show(block=True)
+    # sns.violinplot(
+    #    data=df[["x", "y"]].melt().assign(camera_id=np.hstack([df["camera id"], df["camera id"]])),
+    #    x="camera_id",
+    #    y="value",
+    #    hue="variable",
+    #    split=True,
+    #    gap=0.1,
+    #    inner="point",
+    # )
+    # plt.show(block=True)
     return vehicle, report
 
 

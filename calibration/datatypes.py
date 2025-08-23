@@ -315,6 +315,10 @@ class Camera(Sensor):
 
     class Intrinsics:
         def __init__(self, width: float, height: float, focal_length: np.ndarray, principal_point: np.ndarray, distortion: np.ndarray = None):
+            assert focal_length.shape == (2, 1) or focal_length.shape == (2,)
+            assert principal_point.shape == (2, 1) or principal_point.shape == (2,)
+            assert height > 0
+            assert width > 0
             self.width = width
             self.height = height
             self.focal_length = focal_length
@@ -337,6 +341,15 @@ class Camera(Sensor):
                 focal_length=focal_length,
                 principal_point=principal_point,
                 distortion=distortion,
+            )
+
+        def as_matrix(self):
+            return np.array(
+                [
+                    [self.focal_length[0], 0.0, self.principal_point[0]],
+                    [0.0, self.focal_length[1], self.principal_point[1]],
+                    [0.0, 0.0, 1.0],
+                ]
             )
 
     def __init__(
