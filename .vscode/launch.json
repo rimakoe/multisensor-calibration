@@ -24,6 +24,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/calibration/core.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/test.py",
+            "console": "integratedTerminal"
         }
     ]
 }

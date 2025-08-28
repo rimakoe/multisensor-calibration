@@ -9,7 +9,7 @@ import tqdm
 from plots import *
 from scipy.stats import chi2
 import seaborn as sns
-
+from scipy.stats import norm
 
 # only for groundtruth hack
 deviation = SE3(
@@ -475,8 +475,8 @@ def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
         {
             "camera id": camera_ids,
             "marker id": marker_ids,
-            "x": xs,
-            "y": ys,
+            "u": xs,
+            "v": ys,
         }
     )
     # df.boxplot(column="residuals", by="camera id")
@@ -490,7 +490,44 @@ def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
     #    gap=0.1,
     #    inner="point",
     # )
-    # plt.show(block=True)
+    # expected_noise = pd.DataFrame(
+    #    {
+    #        "x": np.random.normal(0.0, camera_feature_noise, size=(1000)),
+    #        "y": np.random.normal(0.0, camera_feature_noise, size=(1000)),
+    #        "camera id": np.zeros((1000,)),
+    #    }
+    # )
+    # df = pd.concat([df, expected_noise])
+
+    x = np.linspace(-5, 5, 100)
+    y = np.linspace(-5, 5, 100)
+    X, Y = np.meshgrid(x, y)
+    Z = norm.pdf(X, 0, camera_feature_noise) * norm.pdf(Y, 0, camera_feature_noise)
+    sigma_levels = [3, 2, 1, 0]
+    probs = [1 - np.exp(-(s**2) / 2) for s in sigma_levels]
+
+    # Convert probability mass → contour heights
+    # Find the Z value that encloses given probability
+    def find_contour_level(pdf, prob):
+        sorted_vals = np.sort(pdf.ravel())[::-1]
+        cumsum = np.cumsum(sorted_vals)
+        cumsum /= cumsum[-1]
+        return sorted_vals[np.searchsorted(cumsum, prob)]
+
+    contour_levels = [find_contour_level(Z, p) for p in probs]
+    g = sns.jointplot(
+        data=df,
+        x="u",
+        y="v",
+        hue="camera id",
+        fill=True,
+        kind="kde",
+    )
+    g.ax_joint.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=1, linestyles="--", alpha=0.5)
+    perfect_distribution = np.linspace(-5, 5, 100)
+    g.ax_marg_x.plot(perfect_distribution, norm.pdf(perfect_distribution, 0, camera_feature_noise), color="black", ls="--", lw=1, alpha=0.5)
+    g.ax_marg_y.plot(norm.pdf(perfect_distribution, 0, camera_feature_noise), perfect_distribution, color="black", ls="--", lw=1, alpha=0.5)
+    plt.show(block=True)
     return vehicle, report
 
 
