@@ -8,28 +8,35 @@
             "name": "datatypes",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/calibration/datatypes.py",
+            "program": "${workspaceFolder}/calibration/calibration/datatypes.py",
             "console": "integratedTerminal"
         },
         {
             "name": "world_generator",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/calibration/world_generator.py",
+            "program": "${workspaceFolder}/calibration/generation/world_generator.py",
             "console": "integratedTerminal"
         },
         {
             "name": "core",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/calibration/core.py",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
             "console": "integratedTerminal"
         },
         {
             "name": "test",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/calibration/test.py",
+            "program": "${workspaceFolder}/calibration/tests/test.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "sensitivity",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/evaluation/sensitivity_analysis.py",
             "console": "integratedTerminal"
         }
     ]

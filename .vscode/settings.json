@@ -2,5 +2,10 @@
     "xml.format.maxLineWidth": 150,
     "black-formatter.args": [
         "--line-length=150"
-    ]
+    ],
+    "python.analysis.extraPaths": [
+        "/opt/venv/lib/python3.12/site-packages/**",
+        "/home/workspace/calibration"
+    ],
+    "python.defaultInterpreterPath": "/opt/venv/bin/python3"
 }
