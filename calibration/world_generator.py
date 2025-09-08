@@ -1,5 +1,37 @@
 from datatypes import *
 from typing import Tuple
+import os
+import tqdm
+from core import VehicleFactory
+
+
+def projectXYZ2UV(data: pd.DataFrame, intrinsics: Camera.Intrinsics, filter_fov: bool = True):
+    # directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
+    missing = [required_column for required_column in ["x", "y", "z"] if required_column not in data.columns]
+    assert len(missing) == 0, f"missing column(s): {missing}"
+    data = data[data["z"] > 0.0]
+    u = intrinsics.focal_length[0] * data["x"] / data["z"] + intrinsics.principal_point[0]
+    v = intrinsics.focal_length[1] * data["y"] / data["z"] + intrinsics.principal_point[1]
+    df = pd.DataFrame({"id": data["id"], "u": u, "v": v})
+    if filter_fov:
+        df = df[df["u"] < intrinsics.width]
+        df = df[df["u"] > 0]
+        df = df[df["v"] < intrinsics.height]
+        df = df[df["v"] > 0]
+    return df
+
+
+def generate_accurate_camera_solution(dataset_name="C1"):
+    _convention_transform = SE3(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
+    camera: Camera = vehicle.get_frame("TopViewCameraFront")
+    photogrammetry = read_obc(os.path.join(os.getcwd(), "datasets", dataset_name, "photogrammetry.obc"))
+    photogrammetry[["x", "y", "z"]] = (camera.parent.transform @ _convention_transform).inverse().apply(photogrammetry)
+    projected_data = projectXYZ2UV(data=photogrammetry, intrinsics=camera.intrinsics)
+    projected_data.to_json(os.path.join(os.getcwd(), "datasets", dataset_name, "detections.json"))
+    plt.scatter(x=projected_data["u"], y=projected_data["v"])
+    plt.xlim([0.0, camera.intrinsics.width])
+    plt.ylim([camera.intrinsics.height, 0.0])
+    plt.show(block=True)
 
 
 class XACRO:
