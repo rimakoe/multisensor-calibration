@@ -74,6 +74,21 @@
                     "w": 1.0
                 }
             }
+        },
+        "RefLidarFront": {
+            "extrinsics": {
+                "translation": {
+                    "x": 1.0,
+                    "y": 0.0,
+                    "z": 0.8
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.21643961,
+                    "k": 0.0,
+                    "w": 0.97629601
+                }
+            }
         }
     },
     "objects": {
