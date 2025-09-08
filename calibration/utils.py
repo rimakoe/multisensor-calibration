@@ -7,6 +7,13 @@ import pandas as pd
 from pypcd4 import PointCloud
 from PIL import Image
 import matplotlib.pyplot as plt
+import os
+
+workspace_directory = os.path.dirname(os.path.dirname(__file__))
+
+
+def get_dataset_directory():
+    return os.path.join(workspace_directory, "datasets")
 
 
 class ObjectDict(BaseModel):

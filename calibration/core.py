@@ -21,7 +21,7 @@ deviation = SE3(
 #    translation=np.array([0.0, 0.0, 0.0]),
 # )
 
-camera_feature_noise = 1.0  # TODO integrate uncertainty here
+camera_feature_noise = 1.0
 
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
@@ -84,14 +84,15 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
         for _, row in camera.features.iterrows():
             marker_id: int = int(row["id"])
+            sigma = row[["sx", "sy"]]
             edge = g2o.EdgeProjectXYZ2UV()
             edge.set_vertex(0, self.vertex(marker_id))
             edge.set_vertex(1, self.vertex(camera.id))
             edge.set_measurement(row[["x", "y"]].to_numpy())
-            edge.set_information(np.identity(2) / (camera_feature_noise**2))  # no effect right now
+            edge.set_information(np.diag(1.0 / sigma**2))  # no effect right now
             edge.set_parameter_id(0, camera.id)
             edge.set_id(camera.id * 1000 + marker_id * 10)
-            # edge.set_robust_kernel(g2o.RobustKernelHuber(3 * camera_feature_noise))
+            edge.set_robust_kernel(g2o.RobustKernelHuber(3 * np.mean(sigma)))
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
@@ -253,6 +254,20 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
     def __repr__(self):
         pass
 
+    def get_dof(self) -> int:
+        dof: int = 0
+        for edge in self.edges():
+            if type(edge) is g2o.EdgeProjectXYZ2UV:
+                dof += 2
+            if type(edge) is g2o.EdgeVVGicp:
+                dof += 3
+        for id, vertex in self.vertices().items():
+            if vertex.fixed():
+                continue
+            if type(vertex) is g2o.VertexSE3Expmap or type(vertex) is g2o.VertexSE3:
+                dof -= 6
+        return dof
+
     def view_graph(self):
         for id, vertex in self.vertices().items():
             print(f"{id}: {vertex}")
@@ -261,10 +276,12 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
 
 class VehicleFactory:
-    def __init__(self, directory_to_datasets):
+    def __init__(self, directory_to_datasets=get_dataset_directory()):
         self.directory_to_datasets = directory_to_datasets
 
-    def create(self, dataset_name: str, deviation: SE3 = SE3()) -> Tuple[Vehicle, Solution]:
+    def create(
+        self, dataset_name: str, deviation: SE3 = SE3(), camera_feature_noise: float = None, lidar_feature_noise: float = None
+    ) -> Tuple[Vehicle, Solution]:
         solution_filepath = os.path.join(self.directory_to_datasets, dataset_name, "solution.json")
         solution = Solution(**json.load(open(solution_filepath)))
         vehicle = Vehicle(name="Vehicle", system_configuration=dataset_name)
@@ -318,6 +335,9 @@ class VehicleFactory:
                     plane, inlier = fit_plane_ransac("plane", module_pointcloud)
                     features.append(plane)
 
+                if lidar_feature_noise:
+                    pass  # TODO
+
                 initial_guess.add_child(
                     Lidar(
                         name=name,
@@ -332,9 +352,11 @@ class VehicleFactory:
                 features = pd.DataFrame.from_dict(
                     json.load(open(os.path.join(sensor_folder, "detections.json"))),
                 )
-                features[["x", "y"]] += np.random.normal(0.0, camera_feature_noise, size=features[["x", "y"]].shape)
-                features["x"] += 0.5  # not sure if that is really true and gazebo has an offset here
-                features["y"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                features[["sx", "sy"]] = np.ones(features[["x", "y"]].shape) * 1.0
+                if camera_feature_noise:
+                    features[["x", "y"]] += np.random.normal(0.0, camera_feature_noise, size=features[["x", "y"]].shape)
+                # features["x"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                # features["y"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 initial_guess.add_child(
                     Camera(
                         name=name,
@@ -395,18 +417,12 @@ def fit_plane(name: str, points) -> Plane:
     return Plane.from_normal_offset(name=name, normal=normal, offset=centroid)
 
 
-def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
-    directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
-    factory = VehicleFactory(directory_to_datasets)
-    vehicle, solution = factory.create(
-        dataset_name,
-        deviation=deviation,
-    )
+def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple[Vehicle, dict]:
     optimizer = ExtendedSparseOptimizer(
         vehicle=vehicle,
         algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
     )
-    optimizer.add_photogrammetry(photogrammetry=read_obc("/" + os.path.join(directory_to_datasets, dataset_name, "photogrammetry.obc")))
+    optimizer.add_photogrammetry(photogrammetry=read_obc(os.path.join(get_dataset_directory(), dataset_name, "photogrammetry.obc")))
     optimizer.add_sensors()
     optimizer.initialize_optimization()
     optimizer.set_verbose(False)
@@ -415,18 +431,9 @@ def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
     if not silent:
         print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
 
-    dof = 0
-    for edge in optimizer.edges():
-        if type(edge) is g2o.EdgeProjectXYZ2UV:
-            dof += 2
-        if type(edge) is g2o.EdgeVVGicp:
-            dof += 3
-    for id, vertex in optimizer.vertices().items():
-        if vertex.fixed():
-            continue
-        if type(vertex) is g2o.VertexSE3Expmap or type(vertex) is g2o.VertexSE3:
-            dof -= 6
+    dof = optimizer.get_dof()
     assert dof >= 0, "There is not DOF for a unique result"
+
     active_chi2 = optimizer.active_chi2()
     robust_chi2 = optimizer.active_robust_chi2()
     mean, variance, skew, kurtosis = chi2.stats(df=dof, moments="mvsk")
@@ -437,17 +444,17 @@ def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
     if p_value > 0.95:
         global_test_comment = "FAILED - a priori sensor noise seems to be too high"
     report = {
-        "robust chi2": robust_chi2,
-        "active chi2": active_chi2,
-        "kernel quotient": 1.0 - active_chi2 / robust_chi2,
-        "number of edges": len(optimizer.edges()),
+        "robust_chi2": robust_chi2,
+        "active_chi2": active_chi2,
+        "kernel_quotient": 1.0 - robust_chi2 / active_chi2,
+        "number_of_edges": len(optimizer.edges()),
         "dof": dof,
-        "reduced chi2": active_chi2 / dof,  # you want this to be close to 1
-        "reduced sigma": np.sqrt(2 / dof),
+        "reduced_chi2": active_chi2 / dof,  # you want this to be close to 1
+        "reduced_sigma": np.sqrt(2 / dof),
         "skew": skew,
         "kurtosis": kurtosis,
         "p-value": p_value,
-        "chi2 global test": global_test_comment,
+        "chi2_global_test": global_test_comment,
     }
     if not silent:
         print("")
@@ -459,222 +466,84 @@ def main(dataset_name: str = "C4L5", silent=False) -> Tuple[Vehicle, dict]:
         print("")
 
     # gather distributions
+    if plot:
+        # reproject_error_minimization distribution
+        xs = []
+        ys = []
+        camera_ids = []
+        marker_ids = []
+        for edge in optimizer.edges():
+            if type(edge) is g2o.EdgeProjectXYZ2UV:
+                xs.append(edge.error()[0])
+                ys.append(edge.error()[1])
+                marker_ids.append(edge.vertex(0).id())
+                camera_ids.append(edge.vertex(1).id())
+        df = pd.DataFrame(
+            {
+                "camera id": camera_ids,
+                "marker id": marker_ids,
+                "u": xs,
+                "v": ys,
+            }
+        )
+        # df.boxplot(column="residuals", by="camera id")
+        # fig, axes = plt.subplots()
+        # sns.violinplot(
+        #    data=df[["x", "y"]].melt().assign(camera_id=np.hstack([df["camera id"], df["camera id"]])),
+        #    x="camera_id",
+        #    y="value",
+        #    hue="variable",
+        #    split=True,
+        #    gap=0.1,
+        #    inner="point",
+        # )
+        # expected_noise = pd.DataFrame(
+        #    {
+        #        "x": np.random.normal(0.0, camera_feature_noise, size=(1000)),
+        #        "y": np.random.normal(0.0, camera_feature_noise, size=(1000)),
+        #        "camera id": np.zeros((1000,)),
+        #    }
+        # )
+        # df = pd.concat([df, expected_noise])
 
-    # reproject_error_minimization distribution
-    xs = []
-    ys = []
-    camera_ids = []
-    marker_ids = []
-    for edge in optimizer.edges():
-        if type(edge) is g2o.EdgeProjectXYZ2UV:
-            xs.append(edge.error()[0])
-            ys.append(edge.error()[1])
-            marker_ids.append(edge.vertex(0).id())
-            camera_ids.append(edge.vertex(1).id())
-    df = pd.DataFrame(
-        {
-            "camera id": camera_ids,
-            "marker id": marker_ids,
-            "u": xs,
-            "v": ys,
-        }
-    )
-    # df.boxplot(column="residuals", by="camera id")
-    # fig, axes = plt.subplots()
-    # sns.violinplot(
-    #    data=df[["x", "y"]].melt().assign(camera_id=np.hstack([df["camera id"], df["camera id"]])),
-    #    x="camera_id",
-    #    y="value",
-    #    hue="variable",
-    #    split=True,
-    #    gap=0.1,
-    #    inner="point",
-    # )
-    # expected_noise = pd.DataFrame(
-    #    {
-    #        "x": np.random.normal(0.0, camera_feature_noise, size=(1000)),
-    #        "y": np.random.normal(0.0, camera_feature_noise, size=(1000)),
-    #        "camera id": np.zeros((1000,)),
-    #    }
-    # )
-    # df = pd.concat([df, expected_noise])
+        x = np.linspace(-5, 5, 100)
+        y = np.linspace(-5, 5, 100)
+        X, Y = np.meshgrid(x, y)
+        Z = norm.pdf(X, 0, camera_feature_noise) * norm.pdf(Y, 0, camera_feature_noise)
+        sigma_levels = [3, 2, 1, 0]
+        probs = [1 - np.exp(-(s**2) / 2) for s in sigma_levels]
 
-    x = np.linspace(-5, 5, 100)
-    y = np.linspace(-5, 5, 100)
-    X, Y = np.meshgrid(x, y)
-    Z = norm.pdf(X, 0, camera_feature_noise) * norm.pdf(Y, 0, camera_feature_noise)
-    sigma_levels = [3, 2, 1, 0]
-    probs = [1 - np.exp(-(s**2) / 2) for s in sigma_levels]
+        # Convert probability mass → contour heights
+        # Find the Z value that encloses given probability
+        def find_contour_level(pdf, prob):
+            sorted_vals = np.sort(pdf.ravel())[::-1]
+            cumsum = np.cumsum(sorted_vals)
+            cumsum /= cumsum[-1]
+            return sorted_vals[np.searchsorted(cumsum, prob)]
 
-    # Convert probability mass → contour heights
-    # Find the Z value that encloses given probability
-    def find_contour_level(pdf, prob):
-        sorted_vals = np.sort(pdf.ravel())[::-1]
-        cumsum = np.cumsum(sorted_vals)
-        cumsum /= cumsum[-1]
-        return sorted_vals[np.searchsorted(cumsum, prob)]
-
-    contour_levels = [find_contour_level(Z, p) for p in probs]
-    g = sns.jointplot(
-        data=df,
-        x="u",
-        y="v",
-        hue="camera id",
-        fill=True,
-        kind="kde",
-    )
-    g.ax_joint.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=1, linestyles="--", alpha=0.5)
-    perfect_distribution = np.linspace(-5, 5, 100)
-    g.ax_marg_x.plot(perfect_distribution, norm.pdf(perfect_distribution, 0, camera_feature_noise), color="black", ls="--", lw=1, alpha=0.5)
-    g.ax_marg_y.plot(norm.pdf(perfect_distribution, 0, camera_feature_noise), perfect_distribution, color="black", ls="--", lw=1, alpha=0.5)
-    plt.show(block=True)
+        contour_levels = [find_contour_level(Z, p) for p in probs]
+        g = sns.jointplot(
+            data=df,
+            x="u",
+            y="v",
+            hue="camera id",
+            fill=True,
+            kind="kde",
+        )
+        g.ax_joint.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=1, linestyles="--", alpha=0.5)
+        perfect_distribution = np.linspace(-5, 5, 100)
+        g.ax_marg_x.plot(perfect_distribution, norm.pdf(perfect_distribution, 0, camera_feature_noise), color="black", ls="--", lw=1, alpha=0.5)
+        g.ax_marg_y.plot(norm.pdf(perfect_distribution, 0, camera_feature_noise), perfect_distribution, color="black", ls="--", lw=1, alpha=0.5)
+        plt.show(block=True)
     return vehicle, report
 
 
-def lidar_calibration():
+if __name__ == "__main__":
+    dataset_name = "C4L5"
     directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
     factory = VehicleFactory(directory_to_datasets)
     vehicle, solution = factory.create(
-        "C4L5",
+        dataset_name,
         deviation=deviation,
     )
-    lidar: Lidar = vehicle.get_frame("RefLidar")
-    if not lidar:
-        raise NameError("lidar not found via given name")
-    pointcloud = pd.DataFrame(lidar.data.pc_data)
-    pointcloud = pointcloud[np.isfinite(pointcloud).all(1)]
-    pointcloud.dropna()
-    pointcloud = lidar.parent.transform.apply(pointcloud)
-    pointcloud = pointcloud[pointcloud["z"] > 0.5]
-    pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) < 5.0]
-    pointcloud = pointcloud[np.linalg.norm(pointcloud[["x", "y", "z"]], 2, axis=1) > 2.0]
-
-    kmeans = KMeans(n_clusters=8, random_state=0, n_init="auto").fit(pointcloud[["x", "y", "z"]].to_numpy())
-    pointcloud["label"] = kmeans.labels_
-    new_pointcloud = pointcloud
-    photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
-    photogrammetry_planes: List[Plane] = []
-    counter = 0
-    cache = []
-    for _, row in photogrammetry.iterrows():
-        counter += 1
-        cache.append(row)
-        if counter % 6 == 0:
-            photogrammetry_planes.append(fit_plane("plane", pd.concat(cache, axis=1).T))
-            counter = 0
-            cache = []
-    photogrammetry_centroids = [plane.get_offset() for plane in photogrammetry_planes]
-
-    sensor_planes: List[Plane] = []
-    for label in np.unique(new_pointcloud["label"]):
-        module_pointcloud = new_pointcloud[new_pointcloud["label"] == label]
-        plane, inlier = fit_plane_ransac("plane", module_pointcloud)
-        sensor_planes.append(plane)
-        module_pointcloud = module_pointcloud[~inlier]
-        plane, inlier = fit_plane_ransac("plane", module_pointcloud)
-        sensor_planes.append(plane)
-        module_pointcloud = module_pointcloud[~inlier]
-        plane, inlier = fit_plane_ransac("plane", module_pointcloud)
-        sensor_planes.append(plane)
-    sensor_centroids = [plane.get_offset() for plane in sensor_planes]
-
-    optimizer = g2o.SparseOptimizer()
-    optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())))
-    # terminate_action = g2o.SparseOptimizerTerminateAction()
-    # terminate_action.set_gain_threshold(10e-15)
-    # optimizer.add_post_iteration_action(terminate_action)
-
-    vehicle_vertex = g2o.VertexSE3()
-    vehicle_vertex.set_id(0)
-    vehicle_vertex.set_estimate(g2o.Isometry3d(lidar.parent.transform.rotation.as_matrix(), lidar.parent.transform.translation))
-    vehicle_vertex.set_fixed(True)
-    optimizer.add_vertex(vehicle_vertex)
-
-    lidar_vertex = g2o.VertexSE3()
-    lidar_vertex.set_id(1)
-    lidar_vertex.set_estimate(g2o.Isometry3d())
-    lidar_vertex.set_fixed(False)
-    optimizer.add_vertex(lidar_vertex)
-
-    neighbor = NearestNeighbors(n_neighbors=2, radius=0.4, n_jobs=4)
-    neighbor.fit(photogrammetry_centroids)
-    for sensor_idx, photogrammetry_idxs in enumerate(neighbor.kneighbors(sensor_centroids, 2)[1]):
-        for photogrammetry_idx in photogrammetry_idxs:
-            pplane: Plane = photogrammetry_planes[photogrammetry_idx]
-            splane: Plane = sensor_planes[sensor_idx]
-
-            # splane.transform = deviation @ pplane.transform  # HACK for absolute groundtruth matching here to check if solver converges
-
-            normal0 = pplane.get_normal()
-            if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) > np.linalg.norm(pplane.get_offset(), 2):
-                normal0 *= -1.0
-
-            normal1 = splane.get_normal()
-            if np.linalg.norm(splane.get_offset() + normal1 * 0.1, 2) > np.linalg.norm(splane.get_offset(), 2):
-                normal1 *= -1.0
-
-            measurement = g2o.EdgeGICP()
-            measurement.normal0 = normal0
-            measurement.pos0 = pplane.get_offset()
-            measurement.normal1 = normal1
-            measurement.pos1 = splane.get_offset()
-            measurement.prec0(0.01)
-            measurement.prec1(0.01)
-
-            edge = g2o.EdgeVVGicp()
-            edge.set_vertex(0, vehicle_vertex)
-            edge.set_vertex(1, lidar_vertex)
-            edge.set_measurement(measurement)
-            edge.set_information(np.linalg.inv(np.eye(3) / 0.0001))
-            # edge.set_robust_kernel(g2o.RobustKernelHuber(0.01))
-            optimizer.add_edge(edge)
-            break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
-
-    optimizer.initialize_optimization()
-    optimizer.set_verbose(True)
-    optimizer.optimize(10000)
-
-    # The lidar optimization happens in vehicle coordinates for the clustering and ground removal to be easier
-    global_tranform = SE3(
-        rotation=Rotation.from_matrix(optimizer.vertex(1).estimate().rotation().matrix()),
-        translation=optimizer.vertex(1).estimate().translation(),
-    )
-    # Calculate the relative pose from the initial guess from that global result
-    lidar.transform = lidar.parent.transform.inverse() @ global_tranform
-    print("estimated improvement: " + str(lidar.transform))
-    print("estimated deviation (inv improvement): " + str(lidar.transform.inverse()))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
-
-    # draw photogrammetry normals
-    for plane in photogrammetry_planes:
-        normal = plane.get_normal()
-        offset = plane.get_offset()
-        if np.linalg.norm(offset + normal * 0.1, 2) > np.linalg.norm(offset, 2):
-            normal *= -1.0
-        ax.quiver(offset[0], offset[1], offset[2], normal[0], normal[1], normal[2], length=0.5)
-
-    # draw sensor normals
-    for plane in sensor_planes:
-        plane.transform = lidar.transform @ plane.transform
-        offset = plane.get_offset()
-        normal = plane.get_normal()
-        if np.linalg.norm(offset + normal * 0.1, 2) > np.linalg.norm(offset, 2):
-            normal *= -1.0
-        ax.quiver(offset[0], offset[1], offset[2], normal[0], normal[1], normal[2], length=0.5, color="red")
-
-    # draw scatter
-    for label in np.unique(new_pointcloud["label"]):
-        ax.scatter(
-            xs=new_pointcloud[new_pointcloud["label"] == label]["x"][0:-1:10],
-            ys=new_pointcloud[new_pointcloud["label"] == label]["y"][0:-1:10],
-            zs=new_pointcloud[new_pointcloud["label"] == label]["z"][0:-1:10],
-        )
-
-    ax.set_aspect("equal")
-    plt.show(block=True)
-
-
-if __name__ == "__main__":
     vehicle, report = main()
