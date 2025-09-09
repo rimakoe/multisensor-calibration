@@ -24,7 +24,7 @@ class Solution(BaseModel):
                 y: float
                 z: float
 
-                def as_array(self) -> np.ndarray:
+                def to_numpy(self) -> np.ndarray:
                     return np.array([self.x, self.y, self.z])
 
             translation: TranslationDict
@@ -35,7 +35,7 @@ class Solution(BaseModel):
                 k: float
                 w: float
 
-                def as_transform(self) -> Rotation:
+                def to_scipy(self) -> Rotation:
                     return Rotation.from_quat([self.i, self.j, self.k, self.w])
 
             rotation: RotationDict

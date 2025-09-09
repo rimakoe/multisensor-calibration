@@ -38,8 +38,8 @@ class SE3:
     @classmethod
     def from_dict(self, extrinsics: Solution.SensorDict.ExtrinsicsDict) -> "SE3":
         return SE3(
-            translation=Solution.SensorDict.ExtrinsicsDict.TranslationDict.as_array(extrinsics.translation),
-            rotation=Solution.SensorDict.ExtrinsicsDict.RotationDict.as_transform(extrinsics.rotation),
+            translation=Solution.SensorDict.ExtrinsicsDict.TranslationDict.to_numpy(extrinsics.translation),
+            rotation=Solution.SensorDict.ExtrinsicsDict.RotationDict.to_scipy(extrinsics.rotation),
         )
 
     def as_matrix(self) -> np.ndarray:
@@ -89,6 +89,36 @@ class SE3:
         t: np.ndarray = np.round(self.translation, 3)
         r: np.ndarray = np.round(self.rotation.as_euler("xyz", degrees=True), 3)
         return f"SE3(t={t.tolist()},\tr={r.tolist()})\n"
+
+    def __str__(self):
+        t: np.ndarray = np.round(self.translation, 3)
+        r: np.ndarray = np.round(self.rotation.as_euler("xyz", degrees=True), 3)
+        sigmas = np.sqrt(np.diag(self.covariance))
+        sigma_t: np.ndarray = np.round(sigmas[:3], 3)
+        sigma_r: np.ndarray = np.round(sigmas[3:], 3)
+        return f"{t.tolist()} +- {sigma_t.tolist()} | {r.tolist()} +- {sigma_r.tolist()}\n"
+
+    def as_dataframe(self):
+        r: np.ndarray = self.rotation.as_euler("xyz", degrees=True)
+        sigmas = np.sqrt(np.diag(self.covariance))
+        sigma_t: np.ndarray = sigmas[:3]
+        sigma_r: np.ndarray = np.rad2deg(sigmas[3:])
+        return pd.DataFrame(
+            {
+                "x": [self.translation[0]],
+                "sx": [sigma_t[0]],
+                "y": [self.translation[1]],
+                "sy": [sigma_t[1]],
+                "z": [self.translation[2]],
+                "sz": [sigma_t[2]],
+                "roll": [r[0]],
+                "sroll": [sigma_r[0]],
+                "pitch": [r[1]],
+                "spitch": [sigma_r[1]],
+                "yaw": [r[2]],
+                "syaw": [sigma_r[2]],
+            }
+        )
 
 
 class Frame:
@@ -226,8 +256,8 @@ class Sensor(Frame):
     def from_dict(self, name: str, data: Solution.SensorDict) -> "Sensor":
         return Sensor(
             name=name,
-            translation=Solution.SensorDict.ExtrinsicsDict.TranslationDict.as_array(data.extrinsics.translation),
-            rotation=Solution.SensorDict.ExtrinsicsDict.RotationDict.as_transform(data.extrinsics.rotation),
+            translation=Solution.SensorDict.ExtrinsicsDict.TranslationDict.to_numpy(data.extrinsics.translation),
+            rotation=Solution.SensorDict.ExtrinsicsDict.RotationDict.to_scipy(data.extrinsics.rotation),
         )
 
     def __repr__(self):

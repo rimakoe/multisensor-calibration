@@ -17,11 +17,9 @@ deviation = SE3(
     translation=np.array([0.1, 0.1, 0.1]),
 )
 # deviation = SE3(
-#    rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
-#    translation=np.array([0.0, 0.0, 0.0]),
+#     rotation=Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
+#     translation=np.array([0.0, 0.0, 0.0]),
 # )
-
-camera_feature_noise = 1.0
 
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
@@ -84,11 +82,11 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
         for _, row in camera.features.iterrows():
             marker_id: int = int(row["id"])
-            sigma = row[["sx", "sy"]]
+            sigma = row[["su", "sv"]]
             edge = g2o.EdgeProjectXYZ2UV()
             edge.set_vertex(0, self.vertex(marker_id))
             edge.set_vertex(1, self.vertex(camera.id))
-            edge.set_measurement(row[["x", "y"]].to_numpy())
+            edge.set_measurement(row[["u", "v"]].to_numpy())
             edge.set_information(np.diag(1.0 / sigma**2))  # no effect right now
             edge.set_parameter_id(0, camera.id)
             edge.set_id(camera.id * 1000 + marker_id * 10)
@@ -213,17 +211,18 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         if type(frame) is Camera and frame.id == id:
             frame.transform = frame.parent.transform.inverse() @ result.inverse() @ self._convention_transform.inverse()
             frame.transform.covariance = result.covariance
-            # print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
-            # sns.heatmap(
-            #    pd.DataFrame(
-            #        frame.transform.covariance * 10e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
-            #    ),
-            #    annot=True,
-            #    center=0.0,
-            #    cmap="seismic",
-            #    fmt=".2f",
-            # )
-            # plt.show(block=True)
+            print(frame.transform.as_dataframe())
+            sns.heatmap(
+                pd.DataFrame(
+                    frame.transform.covariance * 1e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
+                ),
+                annot=True,
+                center=0.0,
+                cmap="seismic",
+                fmt=".2f",
+            )
+            plt.title(frame.name)
+            plt.show(block=True)
             # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         if type(frame) is Lidar and frame.id == id:
@@ -352,9 +351,9 @@ class VehicleFactory:
                 features = pd.DataFrame.from_dict(
                     json.load(open(os.path.join(sensor_folder, "detections.json"))),
                 )
-                features[["sx", "sy"]] = np.ones(features[["x", "y"]].shape) * 1.0
+                features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * 1.0
                 if camera_feature_noise:
-                    features[["x", "y"]] += np.random.normal(0.0, camera_feature_noise, size=features[["x", "y"]].shape)
+                    features[["u", "v"]] += np.random.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
                 # features["x"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 # features["y"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 initial_guess.add_child(
@@ -505,6 +504,7 @@ def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple
         #    }
         # )
         # df = pd.concat([df, expected_noise])
+        camera_feature_noise = 1.0
 
         x = np.linspace(-5, 5, 100)
         y = np.linspace(-5, 5, 100)
@@ -539,11 +539,8 @@ def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple
 
 
 if __name__ == "__main__":
-    dataset_name = "C4L5"
+    dataset_name = "C1_p1bottom"
     directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
     factory = VehicleFactory(directory_to_datasets)
-    vehicle, solution = factory.create(
-        dataset_name,
-        deviation=deviation,
-    )
+    vehicle, solution = factory.create(dataset_name, deviation=deviation, camera_feature_noise=1.0)
     vehicle, report = main(vehicle=vehicle, dataset_name=dataset_name)
