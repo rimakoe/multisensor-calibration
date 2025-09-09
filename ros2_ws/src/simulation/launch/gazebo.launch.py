@@ -18,7 +18,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch.substitutions import LaunchConfiguration, Command
 from launch.event_handlers import OnProcessExit
 
-camera_names = ["top_view_camera_front", "top_view_camera_rear", "top_view_camera_left", "top_view_camera_right"]
+WORLD = "single_plane_bottom.urdf.xacro"
+ROBOT = "vehicle_only_camera.urdf.xacro"
+
+camera_names = ["front_camera_wide", "top_view_camera_front", "top_view_camera_rear", "top_view_camera_left", "top_view_camera_right"]
 lidar_names = ["ref_lidar", "ref_lidar_front", "ref_lidar_right", "ref_lidar_rear", "ref_lidar_left"]
 
 
@@ -47,8 +50,8 @@ def create_camera_bridges(camera_topic_namepsace: str = "camera") -> list[str]:
 def generate_launch_description():
     package_name = "simulation"
     base_path = Path(get_package_share_directory(package_name))
-    path_to_robot_xacro = os.path.join(base_path, "urdf", "robot.urdf.xacro")
-    path_to_world_xacro = os.path.join(base_path, "worlds", "autogen.urdf.xacro")
+    path_to_robot_xacro = os.path.join(base_path, "robots", ROBOT)
+    path_to_world_xacro = os.path.join(base_path, "worlds", WORLD)
     path_to_world_sdf = path_to_world_xacro.strip(".xacro").replace(".urdf", ".sdf")
 
     launch_gazebo = IncludeLaunchDescription(
