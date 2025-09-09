@@ -5,17 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "generate camera solution",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/generation/exact_camera_features.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "generate calib room data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/generation/xacro_calib_room.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "generate single plane data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/generation/xacro_single_plane.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "datatypes",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/calibration/calibration/datatypes.py",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "world_generator",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/calibration/generation/world_generator.py",
             "console": "integratedTerminal"
         },
         {
