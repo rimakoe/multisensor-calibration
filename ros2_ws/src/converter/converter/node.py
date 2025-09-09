@@ -101,7 +101,9 @@ class CameraLidarAutoRecorder(Node):
                             "y": detection.bbox.center.position.y,
                         }
                     )
-                output_filepath = os.path.join(OUTPUT_DIRECTORY, f"{topic.replace("/", "", 1).split("/")[1].replace("_", "")}", "detections.json")
+                output_filepath = os.path.join(
+                    OUTPUT_DIRECTORY, f"{topic.replace("/", "", 1).split("/")[1].replace("_", "")}", "detections_gazebo.json"
+                )
                 os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
                 pd.DataFrame(rows).to_json(output_filepath)
                 self.get_logger().info(f"Saved detections: {output_filepath}")
