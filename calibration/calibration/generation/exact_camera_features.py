@@ -2,7 +2,7 @@ import os, json
 import pandas as pd
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
-from calibration.datatypes import SE3, Camera
+from calibration.datatypes import Transform, Camera
 from calibration.core import Solution
 from calibration.utils import read_obc, get_dataset_directory
 
@@ -24,14 +24,14 @@ def projectXYZ2UV(data: pd.DataFrame, intrinsics: Camera.Intrinsics, filter_fov:
 
 
 def generate_accurate_camera_solution(dataset_name: str, camera_name: str):
-    _convention_transform = SE3(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
+    _convention_transform = Transform(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
     solution_filepath = os.path.join(get_dataset_directory(), dataset_name, "solution.json")
     solution = Solution(**json.load(open(solution_filepath)))
     camera = solution.devices[camera_name]
     camera = Camera(
         name=camera_name,
         id=1000,
-        transform=SE3(translation=camera.extrinsics.translation.to_numpy(), rotation=camera.extrinsics.rotation.to_scipy()),
+        transform=Transform(translation=camera.extrinsics.translation.to_numpy(), rotation=camera.extrinsics.rotation.to_scipy()),
         intrinsics=Camera.Intrinsics.from_json(os.path.join(get_dataset_directory(), dataset_name, camera_name.lower(), "camera_info.json")),
     )
     photogrammetry = read_obc(os.path.join("/home", "workspace", "datasets", dataset_name, "photogrammetry.obc"))

@@ -1,4 +1,4 @@
-import json
+import json, argparse
 from typing import Tuple
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
@@ -12,7 +12,7 @@ from calibration.utils import *
 from calibration.plots import *
 
 # only for groundtruth hack
-deviation = SE3(
+deviation = Transform(
     rotation=Rotation.from_euler("xyz", [3, 3, 3], degrees=True),
     translation=np.array([0.1, 0.1, 0.1]),
 )
@@ -23,13 +23,15 @@ deviation = SE3(
 
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
-    """TODO"""
+    """Extension of the g2o.SparseOptimizer class that intends to be a help on creating generic parts of the problem such as adding the photogrammetry data of the room or the reprojection error minimization given just the camera as a data container."""
 
-    def __init__(self, vehicle: Vehicle, algorithm: g2o.OptimizationAlgorithm):
+    def __init__(self, vehicle: Vehicle, algorithm: g2o.OptimizationAlgorithm = None):
         super().__init__()
+        if algorithm is None:
+            algorithm = g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3()))
         self.set_algorithm(algorithm)
         self.vehicle = vehicle
-        self._convention_transform = SE3(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
+        self._convention_transform = Transform(rotation=Rotation.from_euler("YXZ", [90, 0, -90], degrees=True))
 
     def add_photogrammetry(self, photogrammetry: pd.DataFrame):
         for _, row in photogrammetry.iterrows():
@@ -55,6 +57,17 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         return
 
     def add_reprojection_error_minimization(self, camera: Camera) -> None:
+        """
+        Abstract function to add all the needed vertices and edges for a reprojection error minimization using a camera object.
+
+        Parameters
+        ----------
+            camera : Camera
+                Camera object that contains the camera informations, the detected features and the initial guess usually as the parent transform.
+        Returns
+        -------
+            None
+        """
         camera_parameter = g2o.CameraParameters(np.mean(camera.intrinsics.focal_length), camera.intrinsics.principal_point, 0)
         camera_parameter.set_id(camera.id)
         self.add_parameter(camera_parameter)
@@ -65,20 +78,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         vertex.set_estimate((camera.parent.transform @ self._convention_transform).inverse().as_eigen())
         self.add_vertex(vertex)
         camera.vertex = vertex
-
-        # Try to make the result relative, but the edge does not care. For this to work the photogrammetrty vertices need to be transformed in sensor coordinates. Since this makes not too much sense we leave it like this.
-        # init_vertex = g2o.VertexSE3Expmap()
-        # init_vertex.set_id(camera.id + 100)
-        # init_vertex.set_fixed(True)
-        # init_vertex.set_estimate((camera.parent.transform @ self.__convention_transform).inverse().as_eigen())
-        # self.add_vertex(init_vertex)
-
-        # edge = g2o.EdgeSE3Expmap()
-        # edge.set_vertex(0, init_vertex)
-        # edge.set_vertex(1, vertex)
-        # edge.set_measurement(g2o.SE3Quat())
-        # edge.set_id(camera.id * 1000 + 900)
-        # self.add_edge(edge)
 
         for _, row in camera.features.iterrows():
             marker_id: int = int(row["id"])
@@ -207,27 +206,26 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
                 break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
 
-    def _integrate_result(self, frame: Frame, id, result: SE3):
+    def _integrate_result(self, frame: Frame, id, result: Tuple[Transform, np.ndarray]):
         if type(frame) is Camera and frame.id == id:
-            frame.transform = frame.parent.transform.inverse() @ result.inverse() @ self._convention_transform.inverse()
-            frame.transform.covariance = result.covariance
-            print(frame.transform.as_dataframe())
-            sns.heatmap(
-                pd.DataFrame(
-                    frame.transform.covariance * 1e6, index=["x", "y", "z", "roll", "pitch", "yaw"], columns=["x", "y", "z", "roll", "pitch", "yaw"]
-                ),
-                annot=True,
-                center=0.0,
-                cmap="seismic",
-                fmt=".2f",
-            )
-            plt.title(frame.name)
-            plt.show(block=True)
+            transform, covariance = result
+            frame.transform = frame.parent.transform.inverse() @ transform.inverse() @ self._convention_transform.inverse()
+            frame.covariance = self._convention_transform.inverse().adjoint().T @ covariance @ self._convention_transform.inverse().adjoint()
+            # frame.covariance = covariance
+            # print(result)
+            # sns.heatmap(
+            #    pd.DataFrame(frame.covariance * 1e6, index=["roll", "pitch", "yaw", "x", "y", "z"], columns=["roll", "pitch", "yaw", "x", "y", "z"]),
+            #    annot=True,
+            #    center=0.0,
+            #    cmap="seismic",
+            #    fmt=".2f",
+            # )
+            # plt.title(frame.name)
+            # plt.show(block=True)
             # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         if type(frame) is Lidar and frame.id == id:
-            frame.transform = result
-            print(np.rad2deg(np.sqrt(np.diag(result.covariance[3:6, 3:6]))))
+            frame.transform = transform
             # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
             return
         for child in frame.children:
@@ -243,10 +241,12 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                     covariance = np.linalg.inv(vertex.hessian())
                 else:
                     covariance = np.zeros((6, 6))
-                result = SE3(
-                    translation=vertex.estimate().translation(),
-                    rotation=Rotation.from_matrix(vertex.estimate().rotation().matrix()),
-                    covariance=covariance,
+                result = (
+                    Transform(
+                        translation=vertex.estimate().translation(),
+                        rotation=Rotation.from_matrix(vertex.estimate().rotation().matrix()),
+                    ),
+                    covariance,
                 )
                 self._integrate_result(self.vehicle, id, result)
 
@@ -279,14 +279,14 @@ class VehicleFactory:
         self.directory_to_datasets = directory_to_datasets
 
     def create(
-        self, dataset_name: str, deviation: SE3 = SE3(), camera_feature_noise: float = None, lidar_feature_noise: float = None
+        self, dataset_name: str, deviation: Transform = Transform(), camera_feature_noise: float = None, lidar_feature_noise: float = None
     ) -> Tuple[Vehicle, Solution]:
         solution_filepath = os.path.join(self.directory_to_datasets, dataset_name, "solution.json")
         solution = Solution(**json.load(open(solution_filepath)))
         vehicle = Vehicle(name="Vehicle", system_configuration=dataset_name)
         sensor_id = 1000
         for name, data in solution.devices.items():
-            initial_guess = Frame(name="InitialGuess", transform=SE3.from_dict(data.extrinsics) @ deviation)
+            initial_guess = Frame(name="InitialGuess", transform=Transform.from_dict(data.extrinsics) @ deviation)
             sensor_folder = os.path.join(self.directory_to_datasets, dataset_name, name.lower())
             if "lidar" in name.lower():
                 # read the pcd
@@ -354,8 +354,8 @@ class VehicleFactory:
                 features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * 1.0
                 if camera_feature_noise:
                     features[["u", "v"]] += np.random.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
-                # features["x"] += 0.5  # not sure if that is really true and gazebo has an offset here
-                # features["y"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                # features["u"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                # features["v"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 initial_guess.add_child(
                     Camera(
                         name=name,
@@ -416,16 +416,7 @@ def fit_plane(name: str, points) -> Plane:
     return Plane.from_normal_offset(name=name, normal=normal, offset=centroid)
 
 
-def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple[Vehicle, dict]:
-    optimizer = ExtendedSparseOptimizer(
-        vehicle=vehicle,
-        algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
-    )
-    optimizer.add_photogrammetry(photogrammetry=read_obc(os.path.join(get_dataset_directory(), dataset_name, "photogrammetry.obc")))
-    optimizer.add_sensors()
-    optimizer.initialize_optimization()
-    optimizer.set_verbose(False)
-    optimizer.optimize(10000)
+def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool = False):
 
     if not silent:
         print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
@@ -535,12 +526,29 @@ def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple
         g.ax_marg_x.plot(perfect_distribution, norm.pdf(perfect_distribution, 0, camera_feature_noise), color="black", ls="--", lw=1, alpha=0.5)
         g.ax_marg_y.plot(norm.pdf(perfect_distribution, 0, camera_feature_noise), perfect_distribution, color="black", ls="--", lw=1, alpha=0.5)
         plt.show(block=True)
+    return report
+
+
+def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple[Vehicle, dict]:
+    optimizer = ExtendedSparseOptimizer(
+        vehicle=vehicle,
+        algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
+    )
+    optimizer.add_photogrammetry(photogrammetry=read_obc(os.path.join(get_dataset_directory(), dataset_name, "photogrammetry.obc")))
+    optimizer.add_sensors()
+    optimizer.initialize_optimization()
+    optimizer.set_verbose(False)
+    optimizer.optimize(10000)
+
+    report = evaluate(optimizer, silent=silent, plot=plot)
     return vehicle, report
 
 
 if __name__ == "__main__":
-    dataset_name = "C1_p1bottom"
-    directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
-    factory = VehicleFactory(directory_to_datasets)
-    vehicle, solution = factory.create(dataset_name, deviation=deviation, camera_feature_noise=1.0)
-    vehicle, report = main(vehicle=vehicle, dataset_name=dataset_name)
+    parser = argparse.ArgumentParser(prog="calibration", description="automated calibration toolchain for camera and lidar")
+    parser.add_argument("-d", "--dataset", default="C1_p1front")
+    parser.add_argument("--dataset-directory", default=get_dataset_directory())
+    args = parser.parse_args()
+    factory = VehicleFactory(args.dataset_directory)
+    vehicle, solution = factory.create(args.dataset, deviation=deviation, camera_feature_noise=1.0)
+    vehicle, report = main(vehicle=vehicle, dataset_name=args.dataset)

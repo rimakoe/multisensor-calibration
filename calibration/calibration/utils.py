@@ -57,3 +57,15 @@ def write_obc(dataframe: pd.DataFrame, output_filepath: str):
 
 def read_obc(filepath: str) -> pd.DataFrame:
     return pd.read_csv(filepath_or_buffer=filepath, sep="\t")
+
+
+def skew(v: np.ndarray):
+    assert v.size == 3
+    assert v.shape == (3,) or v.shape == (3, 1)
+    return np.array(
+        [
+            [0, -v[2], v[1]],
+            [v[2], 0, -v[0]],
+            [-v[1], v[0], 0],
+        ]
+    )

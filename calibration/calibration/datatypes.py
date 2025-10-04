@@ -9,24 +9,29 @@ import g2opy.g2opy as g2o
 from calibration.utils import *
 
 
-class SE3:
-    """
-    TODO
+class Transform:
+    """This is an object that stores the rotation and translation of a rigid body.
+    It is intended to be used inside a Frame and stores a scipy rotation object that can be represented as euler, matrix, quaternion and rotation vector and a numpy array as translational vector.
     """
 
     def __init__(
         self,
         rotation: Rotation = Rotation.from_euler("xyz", [0, 0, 0], degrees=True),
         translation: np.ndarray = np.array([0.0, 0.0, 0.0]),
-        covariance: np.ndarray = np.eye(6),
     ):
+        """
+        Parameters
+        -----------
+            rotation : Rotation
+                Scipy datatype to represent rotations in every possible way (matrix, euler, quaternion, rotation vector)
+            translation : np.ndarray
+                Numpy array that stores the translational offset in euclidean coordinates
+        """
         assert type(rotation) is Rotation, "rotation is expected to be scipy Rotation object"
         assert type(translation) is np.ndarray, "translation is expected to be a numpy array"
         assert translation.shape == (3, 1) or translation.shape == (3,), "translation is expected to be a vector with 3 entries"
-        assert covariance.shape == (6, 6)
         self.rotation = rotation
         self.translation = translation
-        self.covariance = covariance
 
     @classmethod
     def from_matrix(cls, matrix: np.ndarray):
@@ -36,8 +41,8 @@ class SE3:
         return cls(rotation, translation)
 
     @classmethod
-    def from_dict(self, extrinsics: Solution.SensorDict.ExtrinsicsDict) -> "SE3":
-        return SE3(
+    def from_dict(self, extrinsics: Solution.SensorDict.ExtrinsicsDict) -> "Transform":
+        return Transform(
             translation=Solution.SensorDict.ExtrinsicsDict.TranslationDict.to_numpy(extrinsics.translation),
             rotation=Solution.SensorDict.ExtrinsicsDict.RotationDict.to_scipy(extrinsics.rotation),
         )
@@ -65,7 +70,7 @@ class SE3:
         return g2o.SE3Quat(self.rotation.as_matrix(), self.translation)
 
     def inverse(self):
-        return SE3(self.rotation.inv(), -self.rotation.inv().apply(self.translation))
+        return Transform(rotation=self.rotation.inv(), translation=-self.rotation.inv().apply(self.translation))
 
     def apply(self, other: np.ndarray):
         required_columns = ["x", "y", "z"]
@@ -80,10 +85,10 @@ class SE3:
             return pd.DataFrame(applied, columns=required_columns)
         return applied
 
-    def __matmul__(self, other: "SE3") -> "SE3":
+    def __matmul__(self, other: "Transform") -> "Transform":
         r_new = Rotation.from_matrix(self.rotation.as_matrix() @ other.rotation.as_matrix())
         t_new = self.rotation.apply(other.translation) + self.translation
-        return SE3(rotation=r_new, translation=t_new)
+        return Transform(rotation=r_new, translation=t_new)
 
     def __repr__(self):
         t: np.ndarray = np.round(self.translation, 3)
@@ -93,32 +98,17 @@ class SE3:
     def __str__(self):
         t: np.ndarray = np.round(self.translation, 3)
         r: np.ndarray = np.round(self.rotation.as_euler("xyz", degrees=True), 3)
-        sigmas = np.sqrt(np.diag(self.covariance))
-        sigma_t: np.ndarray = np.round(sigmas[:3], 3)
-        sigma_r: np.ndarray = np.round(sigmas[3:], 3)
-        return f"{t.tolist()} +- {sigma_t.tolist()} | {r.tolist()} +- {sigma_r.tolist()}\n"
+        return f"{t.tolist()} | {r.tolist()}\n"
 
-    def as_dataframe(self):
-        r: np.ndarray = self.rotation.as_euler("xyz", degrees=True)
-        sigmas = np.sqrt(np.diag(self.covariance))
-        sigma_t: np.ndarray = sigmas[:3]
-        sigma_r: np.ndarray = np.rad2deg(sigmas[3:])
-        return pd.DataFrame(
-            {
-                "x": [self.translation[0]],
-                "sx": [sigma_t[0]],
-                "y": [self.translation[1]],
-                "sy": [sigma_t[1]],
-                "z": [self.translation[2]],
-                "sz": [sigma_t[2]],
-                "roll": [r[0]],
-                "sroll": [sigma_r[0]],
-                "pitch": [r[1]],
-                "spitch": [sigma_r[1]],
-                "yaw": [r[2]],
-                "syaw": [sigma_r[2]],
-            }
-        )
+    def adjoint(self):
+        assert self.rotation is not None
+        assert self.translation is not None
+        R = self.rotation.as_matrix()
+        adj = np.zeros(shape=(6, 6))
+        adj[:3, :3] = R
+        adj[3:, 3:] = R
+        adj[3:, :3] = skew(self.translation) @ R
+        return adj
 
 
 class Frame:
@@ -126,11 +116,13 @@ class Frame:
     TODO
     """
 
-    def __init__(self, name: str, parent: "Frame" = None, transform: SE3 = SE3()):
+    def __init__(self, name: str, parent: "Frame" = None, transform: Transform = Transform(), covariance: np.ndarray = np.zeros((6, 6))):
+        assert covariance.shape == (6, 6)
         self.name: str = name
         self.parent: "Frame" = parent
         self.children: list["Frame"] = []
-        self.transform: SE3 = transform
+        self.covariance: np.ndarray = covariance
+        self.transform: Transform = transform
 
     def add_child(self, child: "Frame"):
         if not issubclass(type(child), Frame):
@@ -163,7 +155,7 @@ class Frame:
         current_path: List[Frame] = path + [frame]
 
         if not relative_coordinates:
-            transform = SE3()
+            transform = Transform()
             for frame in current_path:
                 transform = transform @ frame.transform
         else:
@@ -215,6 +207,28 @@ class Frame:
     def as_dataframe(self, only_leafs: bool = False, relative_coordinates: bool = True, degrees: bool = True) -> pd.DataFrame:
         return pd.DataFrame(self.flatten(only_leafs=only_leafs, relative_coordinates=relative_coordinates, degrees=degrees)).round(4)
 
+    def __repr__(self):
+        r: np.ndarray = self.transform.rotation.as_euler("xyz", degrees=True)
+        sigmas = np.sqrt(np.diag(self.covariance))
+        sigma_t: np.ndarray = sigmas[3:]
+        sigma_r: np.ndarray = np.rad2deg(Rotation.from_rotvec(sigmas[:3]).as_euler("xyz"))
+        return pd.DataFrame(
+            {
+                "x": [self.transform.translation[0]],
+                "y": [self.transform.translation[1]],
+                "z": [self.transform.translation[2]],
+                "roll": [r[0]],
+                "pitch": [r[1]],
+                "yaw": [r[2]],
+                "sx": [sigma_t[0]],
+                "sy": [sigma_t[1]],
+                "sz": [sigma_t[2]],
+                "sroll": [sigma_r[0]],
+                "spitch": [sigma_r[1]],
+                "syaw": [sigma_r[2]],
+            }
+        )
+
 
 class Vehicle(Frame):
     """
@@ -247,7 +261,7 @@ class Sensor(Frame):
         name: str,
         data: np.ndarray = None,
         parent: Frame = None,
-        transform: SE3 = SE3(),
+        transform: Transform = Transform(),
     ):
         super().__init__(name, parent, transform)
         self.data = data
@@ -261,7 +275,26 @@ class Sensor(Frame):
         )
 
     def __repr__(self):
-        return f"{self.name}\t|\t({self.transform.translation} | {self.transform.rotation.as_euler("xyz", degrees=True)})\n"
+        r: np.ndarray = self.transform.rotation.as_euler("xyz", degrees=True)
+        sigmas = np.sqrt(np.diag(self.covariance))
+        sigma_t: np.ndarray = sigmas[3:]
+        sigma_r: np.ndarray = np.rad2deg(Rotation.from_rotvec(sigmas[:3]).as_euler("xyz"))
+        return pd.DataFrame(
+            {
+                "x": [self.transform.translation[0]],
+                "y": [self.transform.translation[1]],
+                "z": [self.transform.translation[2]],
+                "roll": [r[0]],
+                "pitch": [r[1]],
+                "yaw": [r[2]],
+                "sx": [sigma_t[0]],
+                "sy": [sigma_t[1]],
+                "sz": [sigma_t[2]],
+                "sroll": [sigma_r[0]],
+                "spitch": [sigma_r[1]],
+                "syaw": [sigma_r[2]],
+            }
+        ).to_string()
 
 
 class Marker(Frame):
@@ -270,7 +303,7 @@ class Marker(Frame):
         id: int,
         name: str,
         parent: Frame = None,
-        transform: SE3 = SE3(),
+        transform: Transform = Transform(),
     ):
         super().__init__(name, parent, transform)
         self.id = id
@@ -281,7 +314,7 @@ class Plane(Frame):
         self,
         name: str,
         parent: Frame = None,
-        transform: SE3 = SE3(),
+        transform: Transform = Transform(),
     ):
         super().__init__(name, parent, transform)
 
@@ -296,7 +329,7 @@ class Plane(Frame):
         x /= np.linalg.norm(x, 2)
         y = np.cross(z, x)
         y /= np.linalg.norm(y, 2)
-        return Plane(name, parent, transform=SE3(rotation=Rotation.from_matrix(np.stack([x, y, z], axis=1)), translation=offset))
+        return Plane(name, parent, transform=Transform(rotation=Rotation.from_matrix(np.stack([x, y, z], axis=1)), translation=offset))
 
     def get_offset(self):
         return self.transform.translation
@@ -328,7 +361,7 @@ class Lidar(Sensor):
         data: PointCloud = None,
         features: List[Plane] = None,
         parent: Frame = None,
-        transform: SE3 = SE3(),
+        transform: Transform = Transform(),
         intrinsics: Intrinsics = None,
     ):
         super().__init__(name, data, parent, transform)
@@ -388,7 +421,7 @@ class Camera(Sensor):
         data: Image = None,
         features: pd.DataFrame = None,
         parent: Frame = None,
-        transform: SE3 = SE3(),
+        transform: Transform = Transform(),
         intrinsics: "Intrinsics" = None,
     ):
         super().__init__(name, data, parent, transform)
@@ -408,7 +441,7 @@ if __name__ == "__main__":
     vehicle = Vehicle(name="Vehicle", system_configuration="CL-0.5")
     sensor_id = 1000
     for name, data in solution.devices.items():
-        initial_guess = Frame(name="InitialGuess", transform=SE3.from_dict(data.extrinsics))
+        initial_guess = Frame(name="InitialGuess", transform=Transform.from_dict(data.extrinsics))
         if "lidar" in name.lower():
             initial_guess.add_child(Lidar(name=name, id=sensor_id))
             vehicle.add_child(initial_guess)

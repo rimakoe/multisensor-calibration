@@ -2,7 +2,7 @@ import tqdm
 from calibration.datatypes import *
 from calibration.core import VehicleFactory, main
 
-deviation = SE3(
+deviation = Transform(
     rotation=Rotation.from_euler("xyz", [3, 3, 3], degrees=True),
     translation=np.array([0.1, 0.1, 0.1]),
 )

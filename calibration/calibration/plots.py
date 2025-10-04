@@ -4,7 +4,7 @@ from matplotlib import colors
 from calibration.datatypes import *
 
 
-def plot_heatmap(title: str, transform: SE3):
+def plot_heatmap(title: str, transform: Transform):
     labels = ["x", "y", "z", "roll", "pitch", "yaw"]
     fig, ax = plt.subplots()
     im = ax.imshow(transform.covariance, cmap="seismic", norm=colors.CenteredNorm())

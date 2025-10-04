@@ -15,12 +15,12 @@ class XACROMarker(Marker):
         ]
     )
 
-    def __init__(self, id: int, name: str, parent: Frame = None, transform: SE3 = SE3()):
+    def __init__(self, id: int, name: str, parent: Frame = None, transform: Transform = Transform()):
         super().__init__(id, name, parent, transform)
 
     def as_xacro(self, path: List[Frame]) -> str:
         path.pop(-1)
-        absolute_parent_transform = SE3()
+        absolute_parent_transform = Transform()
         for frame in path:
             absolute_parent_transform = absolute_parent_transform @ frame.transform
         r_parent = absolute_parent_transform.rotation.as_euler("xyz")
@@ -66,7 +66,7 @@ class XACROPlane(Plane):
         ]
     )
 
-    def __init__(self, name: str, parent: Frame = None, transform: SE3 = SE3(), size: np.ndarray = np.array([1.0, 1.0, 0.02])):
+    def __init__(self, name: str, parent: Frame = None, transform: Transform = Transform(), size: np.ndarray = np.array([1.0, 1.0, 0.02])):
         super().__init__(name, parent, transform)
         assert size.shape == (3,)
         self.size = size
@@ -75,7 +75,7 @@ class XACROPlane(Plane):
         return self.transform.rotation.apply(np.array([0, 0, 1]))
 
     def as_xacro(self, path: List[Frame]) -> str:
-        absolute_transform = SE3()
+        absolute_transform = Transform()
         for frame in path:
             absolute_transform = absolute_transform @ frame.transform
         r = absolute_transform.rotation.as_euler("xyz")
@@ -96,26 +96,26 @@ class XACROPlane(Plane):
 
 def create_3x3_marker_descriptions(start_id: int = 0):
     return [
-        (start_id + 0, SE3(translation=np.array([-0.25, 0.0, 0.001]))),
-        (start_id + 1, SE3(translation=np.array([0.0, 0.0, 0.001]))),
-        (start_id + 2, SE3(translation=np.array([0.25, 0.0, 0.001]))),
-        (start_id + 3, SE3(translation=np.array([-0.25, 0.25, 0.001]))),
-        (start_id + 4, SE3(translation=np.array([0.0, 0.25, 0.001]))),
-        (start_id + 5, SE3(translation=np.array([0.25, 0.25, 0.001]))),
-        (start_id + 6, SE3(translation=np.array([-0.25, -0.25, 0.001]))),
-        (start_id + 7, SE3(translation=np.array([0.0, -0.25, 0.001]))),
-        (start_id + 8, SE3(translation=np.array([0.25, -0.25, 0.001]))),
+        (start_id + 0, Transform(translation=np.array([-0.25, 0.0, 0.001]))),
+        (start_id + 1, Transform(translation=np.array([0.0, 0.0, 0.001]))),
+        (start_id + 2, Transform(translation=np.array([0.25, 0.0, 0.001]))),
+        (start_id + 3, Transform(translation=np.array([-0.25, 0.25, 0.001]))),
+        (start_id + 4, Transform(translation=np.array([0.0, 0.25, 0.001]))),
+        (start_id + 5, Transform(translation=np.array([0.25, 0.25, 0.001]))),
+        (start_id + 6, Transform(translation=np.array([-0.25, -0.25, 0.001]))),
+        (start_id + 7, Transform(translation=np.array([0.0, -0.25, 0.001]))),
+        (start_id + 8, Transform(translation=np.array([0.25, -0.25, 0.001]))),
     ]
 
 
 def create_321_marker_descriptions(start_id: int = 0):
     return [
-        (start_id + 0, SE3(translation=np.array([0.25, -0.25, 0.001]))),
-        (start_id + 1, SE3(translation=np.array([0.25, 0.0, 0.001]))),
-        (start_id + 2, SE3(translation=np.array([0.25, 0.25, 0.001]))),
-        (start_id + 3, SE3(translation=np.array([0.0, -0.125, 0.001]))),
-        (start_id + 4, SE3(translation=np.array([0.0, 0.125, 0.001]))),
-        (start_id + 5, SE3(translation=np.array([-0.25, 0.0, 0.001]))),
+        (start_id + 0, Transform(translation=np.array([0.25, -0.25, 0.001]))),
+        (start_id + 1, Transform(translation=np.array([0.25, 0.0, 0.001]))),
+        (start_id + 2, Transform(translation=np.array([0.25, 0.25, 0.001]))),
+        (start_id + 3, Transform(translation=np.array([0.0, -0.125, 0.001]))),
+        (start_id + 4, Transform(translation=np.array([0.0, 0.125, 0.001]))),
+        (start_id + 5, Transform(translation=np.array([-0.25, 0.0, 0.001]))),
     ]
 
 
@@ -127,15 +127,15 @@ def create_nxm_marker_descriptions(n: int, m: int, start_id: int = 0):
         for col in range(m):
             y = col / (m - 1) - 0.5
             y *= 0.8
-            markers.append((start_id + (row * m) + (col + 1), SE3(translation=np.array([x, y, 0.001]))))
+            markers.append((start_id + (row * m) + (col + 1), Transform(translation=np.array([x, y, 0.001]))))
     return markers
 
 
 def create_plane(
     name: str,
     size: np.ndarray = np.array([1, 1, 0.001]),
-    transform: SE3 = SE3(),
-    marker_descriptions: Tuple[int, SE3] = None,
+    transform: Transform = Transform(),
+    marker_descriptions: Tuple[int, Transform] = None,
 ):
     plane = XACROPlane(
         name=name,
@@ -157,13 +157,13 @@ def create_plane(
     return plane
 
 
-def create_module(id: int, transform: SE3 = SE3()) -> Frame:
+def create_module(id: int, transform: Transform = Transform()) -> Frame:
     module = Frame(name=f"mod{id}", transform=transform)
     module.add_child(
         create_plane(
             name="p" + str(id * 3 + 0),
             size=np.array([1.0, 1.7, 0.001]),
-            transform=SE3(translation=np.array([-0.1, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
+            transform=Transform(translation=np.array([-0.1, 0.0, 1.75]), rotation=Rotation.from_euler("xyz", [0.0, -120.0, 0.0], degrees=True)),
             marker_descriptions=create_321_marker_descriptions(id * 18 + 0),
         )
     )
@@ -171,7 +171,7 @@ def create_module(id: int, transform: SE3 = SE3()) -> Frame:
         create_plane(
             name="p" + str(id * 3 + 1),
             size=np.array([1.0, 2.0, 0.001]),
-            transform=SE3(translation=np.array([0.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
+            transform=Transform(translation=np.array([0.0, 0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, 25.0, 90.0], degrees=True)),
             marker_descriptions=create_321_marker_descriptions(id * 18 + 6),
         )
     )
@@ -179,7 +179,7 @@ def create_module(id: int, transform: SE3 = SE3()) -> Frame:
         create_plane(
             name="p" + str(id * 3 + 2),
             size=np.array([1.0, 2.0, 0.001]),
-            transform=SE3(translation=np.array([0.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
+            transform=Transform(translation=np.array([0.0, -0.4, 1.0]), rotation=Rotation.from_euler("YXZ", [-90.0, -25.0, -90.0], degrees=True)),
             marker_descriptions=create_321_marker_descriptions(id * 18 + 12),
         )
     )
