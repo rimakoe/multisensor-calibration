@@ -6,6 +6,8 @@ import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+rng = np.random.default_rng(0)  # one reproducible stream
+
 
 def feature_sensitivity():
     # Path configuration stuff
@@ -18,18 +20,16 @@ def feature_sensitivity():
 
     # actual content of this investigation
     camera_feature_noise = 1.0  # px - normal distributed feature noise
-    deviation = Transform(  # initial guess deviation from solution
-        rotation=Rotation.from_euler("xyz", [3, 3, 3], degrees=True),
-        translation=np.array([0.1, 0.1, 0.1]),
-    )
 
     df = pd.DataFrame()
-    for i in tqdm.tqdm(range(1000)):
-        np.random.seed(i)
+    df2 = pd.DataFrame()
+    l = []
+    for i in tqdm.tqdm(range(5000)):
+        # np.random.seed(i)
         features = pd.DataFrame.from_dict(
             json.load(open(os.path.join(sensor_folder, "detections.json"))),
         )
-        features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * camera_feature_noise  # give really sigma here
+        features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * camera_feature_noise * 2.0  # give really sigma here
         camera = Camera(
             name=sensor_name,
             id=1000,
@@ -39,7 +39,11 @@ def feature_sensitivity():
             ),
             features=features,  # give the perfect features for now jsut to avoid None, this is modified during the loop in a normal distributed fashion
         )
-        camera.features[["u", "v"]] = features[["u", "v"]].copy() + np.random.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
+        deviation = Transform(  # initial guess deviation from solution
+            rotation=Rotation.from_euler("xyz", np.array([0.0, 0.0, 0.0]) + rng.normal(0.0, 3.0, size=3), degrees=True),
+            translation=np.array([0.0, 0.0, 0.0]) + rng.normal(0.0, 0.1, size=3),
+        )
+        camera.features[["u", "v"]] = features[["u", "v"]].copy() + rng.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
         initial_guess = Frame(name="InitialGuess", transform=Transform.from_dict(solution.devices[sensor_name].extrinsics) @ deviation)
         initial_guess.add_child(camera)
         vehicle = Vehicle(name="sensitivity analysis vehicle container", system_configuration=dataset_name)
@@ -75,54 +79,47 @@ def feature_sensitivity():
         optimizer.clear()
         delta = Transform.from_dict(solution.devices[sensor_name].extrinsics).inverse() @ initial_guess.transform @ camera.transform
         df = pd.concat([df, pd.DataFrame(report, index=[i])])
-    output = pd.DataFrame(
-        {
-            "mean": np.mean(
-                df[
-                    [
-                        "prec_tx",
-                        "prec_ty",
-                        "prec_tz",
-                        "prec_rx",
-                        "prec_ry",
-                        "prec_rz",
-                        "delta_tx",
-                        "delta_ty",
-                        "delta_tz",
-                        "delta_rx",
-                        "delta_ry",
-                        "delta_rz",
-                    ]
-                ],
-                axis=0,
-            ),
-            "std": np.std(
-                df[
-                    [
-                        "prec_tx",
-                        "prec_ty",
-                        "prec_tz",
-                        "prec_rx",
-                        "prec_ry",
-                        "prec_rz",
-                        "delta_tx",
-                        "delta_ty",
-                        "delta_tz",
-                        "delta_rx",
-                        "delta_ry",
-                        "delta_rz",
-                    ]
-                ],
-                axis=0,
-            ),
-        }
-    )
-    # output["normed"] = np.abs(output["mean"]) / output["std"]
-    output = output.T
-    output["noise"] = camera_feature_noise
-    sns.boxplot(data=pd.melt(df), y="delta_tx")
+        if i % 10 == 0 and i > 0:
+            output = pd.DataFrame(
+                data={
+                    "prec": np.concatenate(
+                        [
+                            np.mean(df[["prec_tx", "prec_ty", "prec_tz", "prec_rx", "prec_ry", "prec_rz"]], axis=0).to_numpy(),
+                            np.std(df[["prec_tx", "prec_ty", "prec_tz", "prec_rx", "prec_ry", "prec_rz"]], axis=0).to_numpy(),
+                        ]
+                    ),
+                    "delta": np.concatenate(
+                        [
+                            np.mean(df[["delta_tx", "delta_ty", "delta_tz", "delta_rx", "delta_ry", "delta_rz"]], axis=0).to_numpy(),
+                            np.std(df[["delta_tx", "delta_ty", "delta_tz", "delta_rx", "delta_ry", "delta_rz"]], axis=0).to_numpy(),
+                        ]
+                    ),
+                },
+                index=["tx", "ty", "tz", "rx", "ry", "rz", "stx", "sty", "stz", "srx", "sry", "srz"],
+            ).T
+            # output["noise"] = camera_feature_noise
+            o = pd.DataFrame(
+                {
+                    "prec": output[["tx", "ty", "tz", "rx", "ry", "rz"]].loc["prec"].to_numpy(),
+                    "delta": output[["stx", "sty", "stz", "srx", "sry", "srz"]].loc["delta"].to_numpy(),
+                },
+                index=["tx", "ty", "tz", "rx", "ry", "rz"],
+            ).T
+            l.append((o.loc["prec"] - o.loc["delta"]).to_numpy().flatten())
+    l = np.array(l)
+    plt.subplot(211)
+    plt.title("difference to covariances from remaining hessian")
+    plt.semilogx(l[:, :3] * 1000.0)
+    plt.legend(["x", "y", "z"])
+    plt.ylabel("translation [mm]")
+    plt.grid(True)
+    plt.subplot(212)
+    plt.semilogx(l[:, 3:])
+    plt.legend(["x", "y", "z"])
+    plt.xlabel("iterations x 10")
+    plt.ylabel("rotvec [rad]")
+    plt.grid(True)
     plt.show(block=True)
-    print(output)
 
 
 if __name__ == "__main__":
