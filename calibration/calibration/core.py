@@ -21,6 +21,8 @@ deviation = Transform(
 #     translation=np.array([0.0, 0.0, 0.0]),
 # )
 
+rng = np.random.default_rng(0)  # one reproducible stream
+
 
 class ExtendedSparseOptimizer(g2o.SparseOptimizer):
     """Extension of the g2o.SparseOptimizer class that intends to be a help on creating generic parts of the problem such as adding the photogrammetry data of the room or the reprojection error minimization given just the camera as a data container."""
@@ -211,18 +213,8 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             transform, covariance = result
             frame.transform = frame.parent.transform.inverse() @ transform.inverse() @ self._convention_transform.inverse()
             frame.covariance = self._convention_transform.inverse().adjoint().T @ covariance @ self._convention_transform.inverse().adjoint()
-            # frame.covariance = covariance
-            # print(result)
-            # sns.heatmap(
-            #    pd.DataFrame(frame.covariance * 1e6, index=["roll", "pitch", "yaw", "x", "y", "z"], columns=["roll", "pitch", "yaw", "x", "y", "z"]),
-            #    annot=True,
-            #    center=0.0,
-            #    cmap="seismic",
-            #    fmt=".2f",
-            # )
-            # plt.title(frame.name)
-            # plt.show(block=True)
-            # plot_heatmap(title=f"{frame.name} covariance matrix", transform=frame.transform)
+            # frame.covariance = covariance # Only if we do not want the covariance to be rotated to fit to the convention and thus given in camera coords
+            # plot_heatmap(title=f"{frame.name} covariance matrix", frame=frame)
             return
         if type(frame) is Lidar and frame.id == id:
             frame.transform = transform
@@ -353,7 +345,7 @@ class VehicleFactory:
                 )
                 features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * 1.0
                 if camera_feature_noise:
-                    features[["u", "v"]] += np.random.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
+                    features[["u", "v"]] += rng.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
                 # features["u"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 # features["v"] += 0.5  # not sure if that is really true and gazebo has an offset here
                 initial_guess.add_child(
