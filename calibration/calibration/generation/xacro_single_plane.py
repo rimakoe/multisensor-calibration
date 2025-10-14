@@ -31,3 +31,17 @@ xacro_single_plane_front.world.add_child(
     )
 )
 xacro_single_plane_front.export(output_directory=os.path.join(os.path.dirname(__file__), "single_plane_front"))
+
+xacro_single_plane_left = XACRO("single_plane_left")
+n = 10
+m = 10
+plane_id = 0
+xacro_single_plane_left.world.add_child(
+    create_plane(
+        name="p" + str(plane_id),
+        size=np.array([3.0, 3.0, 0.001]),
+        transform=Transform(translation=np.array([8.0, 3.0, 1.5]), rotation=Rotation.from_euler("XYZ", [90.0, 0.0, 0.0], degrees=True)),
+        marker_descriptions=create_nxm_marker_descriptions(n, m),
+    )
+)
+xacro_single_plane_left.export(output_directory=os.path.join(os.path.dirname(__file__), "single_plane_left"))
