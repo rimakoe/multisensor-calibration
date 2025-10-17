@@ -123,6 +123,7 @@ class CameraLidarAutoRecorder(Node):
                 output_filepath = os.path.join(OUTPUT_DIRECTORY, sensor_name, sensor_name + ".bmp")
                 os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
                 cv2.imwrite(output_filepath, cv_image)
+                cv2.imwrite(output_filepath.replace(".bmp", ".png"), cv_image)
                 self.get_logger().info(f"Saved image: {output_filepath}")
                 self.destroy_subscription(self.image_subs[topic])
                 self.get_logger().info(f"Destroyed subscription: {topic}")

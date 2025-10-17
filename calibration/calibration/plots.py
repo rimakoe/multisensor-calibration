@@ -9,7 +9,7 @@ def plot_heatmap_compact(title: str, frame: Frame):
     assert frame.covariance.shape == (6, 6), "Unable to plot. Covariance has unexpected shape."
 
     def _plot_3x3(ax: Axes, title: str, matrix: np.array, labels_x: list[str], labels_y: list[str]):
-        ax.imshow(matrix[:3, :3], cmap="seismic", norm=colors.CenteredNorm())
+        ax.imshow(matrix[:3, :3], cmap="bwr", norm=colors.CenteredNorm())
         for i in range(3):
             for j in range(3):
                 ax.text(j, i, np.round(matrix[i, j] * 1e6, 3), ha="center", va="center", color="k")

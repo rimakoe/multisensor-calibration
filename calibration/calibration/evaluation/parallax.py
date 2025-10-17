@@ -1,6 +1,13 @@
 from calibration.datatypes import *
 from calibration.core import Vehicle, ExtendedSparseOptimizer, evaluate
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib.ticker import ScalarFormatter
+
+mpl.rcParams["axes.formatter.useoffset"] = True
+mpl.rcParams["axes.formatter.use_locale"] = True
+mpl.rcParams["axes.formatter.use_mathtext"] = True
+mpl.rcParams["axes.formatter.limits"] = (-1, 1)  # always
 
 rng = np.random.default_rng(0)  # one reproducible stream
 
@@ -10,6 +17,7 @@ def run():
     directory_to_datasets = "/" + os.path.join("home", "workspace", "datasets")
     dataset_name = "parallax"
     result = []
+    cross_correlations = []
     for subset_name in sorted(os.listdir(os.path.join(directory_to_datasets, "parallax"))):
         sensor_name = "FrontCameraWide"
         sensor_folder = os.path.join(directory_to_datasets, dataset_name, subset_name, sensor_name.lower())
@@ -66,28 +74,40 @@ def run():
             "delta_t": np.linalg.norm(delta.translation, 2),
             "delta_r": np.linalg.norm(delta_rotation_vector, 2),
         }
-        result.append(np.concatenate([precision_rotation.as_rotvec("xyz"), precision_translation]))  # to milli
-    result = np.array(result) * 1e3  # to milli
-    print(result)
-    ax_left = plt.subplot(121)
+        cross_correlations.append([camera.covariance[1, 5], camera.covariance[2, 4]])  # t_z omega_y, and t_y and omega_z
+        result.append(np.concatenate([camera.covariance[:3, :3].diagonal().copy(), camera.covariance[3:, 3:].diagonal().copy()]))  # to milli
+    result = np.array(result)  # to milli
+    plt.figure(figsize=(9, 3))
+    ax_left = plt.subplot(131)
     ax_left.grid(True)
     ax_left.plot(result[:, :3])
     ax_left.legend(["$\\omega_x$", "$\\omega_y$", "$\\omega_z$"])
-    ax_left.yaxis.set_label_text("rotation $\\sigma$ in $mrad$")
-    ax_left.xaxis.set_label_text("distance")
+    # ax_left.set_title("rotation")
+    ax_left.yaxis.set_label_text("$\\sigma^2_\\omega$  [$rad^2$]")
+    ax_left.xaxis.set_label_text("distance [m]")
     ax_left.xaxis.set_ticks([0, 1, 2, 3, 4, 5])
     ax_left.xaxis.set_ticklabels([10, 12, 14, 16, 18, 20])
-    ax_right = plt.subplot(122)
-    ax_right.yaxis.tick_right()
-    ax_right.yaxis.set_label_position("right")
+    ax_center = plt.subplot(132)
+    # ax_center.set_title("rotation / translation")
+    ax_center.plot(np.array(cross_correlations))
+    ax_center.grid(True)
+    ax_center.yaxis.set_label_text("$\\sigma^2_{t, \\omega}$ [$m \\cdot rad$]")
+    ax_center.xaxis.set_ticks([0, 1, 2, 3, 4, 5])
+    ax_center.xaxis.set_ticklabels([10, 12, 14, 16, 18, 20])
+    ax_center.xaxis.set_label_text("distance [m]")
+    ax_center.legend(["$t_z \\propto \\omega_y$", "$t_y \\propto \\omega_z$"])
+    ax_right = plt.subplot(133)
+    # ax_right.set_title("translation")
+    # ax_right.yaxis.tick_right()
+    # ax_right.yaxis.set_label_position("right")
     ax_right.grid(True)
     ax_right.plot(result[:, 3:])
     ax_right.legend(["$t_x$", "$t_y$", "$t_z$"])
-    ax_right.yaxis.set_label_text("translation $\\sigma$ in $mm$")
-    ax_right.xaxis.set_label_text("distance")
+    ax_right.yaxis.set_label_text("$\\sigma^2_t$ [$m^2$]")
+    ax_right.xaxis.set_label_text("distance [m]")
     ax_right.xaxis.set_ticks([0, 1, 2, 3, 4, 5])
     ax_right.xaxis.set_ticklabels([10, 12, 14, 16, 18, 20])
-
+    plt.tight_layout(pad=1.5)
     plt.show(block=True)
 
 
