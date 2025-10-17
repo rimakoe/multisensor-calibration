@@ -1,0 +1,73 @@
+{
+    "devices": {
+        "FrontCameraWide": {
+            "extrinsics": {
+                "translation": {
+                    "x": 2.0,
+                    "y": 0.0,
+                    "z": 1.3
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
+        },
+        "TopViewCameraFront": {
+            "extrinsics": {
+                "translation": {
+                    "x": 3.8,
+                    "y": 0.0,
+                    "z": 0.5
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 1.0
+                }
+            }
+        }
+    },
+    "objects": {
+        "planes": {
+            "p1": {
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "normal": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                }
+            }
+        },
+        "edges": {},
+        "corners": {
+            "c1": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            }
+        },
+        "modules": {
+            "m1": {
+                "translation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "i": 0.0,
+                    "j": 0.0,
+                    "k": 0.0,
+                    "w": 0.0
+                }
+            }
+        }
+    }
+}
