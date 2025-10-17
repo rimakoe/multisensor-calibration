@@ -37,6 +37,11 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "RefLidar",
+                //"AnotherSensor",
+                "--dataset=C1L1_triple_module_front",
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -51,6 +56,20 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/calibration/calibration/evaluation/sensitivity_analysis.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "parallax",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/evaluation/parallax.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "monte_carlo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/evaluation/monte_carlo.py",
             "console": "integratedTerminal"
         }
     ]
