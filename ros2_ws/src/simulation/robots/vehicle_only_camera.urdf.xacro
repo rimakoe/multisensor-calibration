@@ -32,24 +32,7 @@
         x="2.0" y="0.0" z="1.3"
         roll="0.0" pitch="0.0" yaw="0.0"
     />
-    <xacro:camera_pinhole_macro name="top_view_camera_front" parent_link="base_link"
-        hfov="140.0" width="1920" height="1540"
-        x="3.8" y="0.0" z="0.5"
-        roll="0.0" pitch="0.0" yaw="0.0"
-    />
-    <xacro:camera_pinhole_macro name="top_view_camera_left" parent_link="base_link"
-        hfov="140.0" width="1920" height="1540"
-        x="2.0" y="1.0" z="1.0"
-        roll="0.0" pitch="25.0" yaw="90"
-    />
-    <xacro:camera_pinhole_macro name="top_view_camera_right" parent_link="base_link"
-        hfov="140.0" width="1920" height="1540"
-        x="2.0" y="-1.0" z="1.0"
-        roll="0.0" pitch="25.0" yaw="-90"
-    />
-    <xacro:camera_pinhole_macro name="top_view_camera_rear" parent_link="base_link"
-        hfov="140.0" width="1920" height="1540"
-        x="-1.0" y="0.0" z="0.7"
-        roll="0.0" pitch="0.0" yaw="180"
-    />
+
+    <xacro:include filename="$(find simulation)/sensors/lidar.xacro" />
+    <xacro:lidar_macro name="ref_lidar" parent_link="base_link" x="0.0" y="0.0" z="2.0" roll="0.0" pitch="0.0" yaw="0.0" />
 </robot>
