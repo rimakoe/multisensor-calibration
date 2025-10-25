@@ -13,6 +13,10 @@ from calibration.plots import *
 
 DEBUG = False
 
+CHI2_SIGMA_1 = 1.88
+CHI2_SIGMA_2 = 2.83
+CHI2_SIGMA_3 = 3.88
+
 rng = np.random.default_rng(0)  # one reproducible stream
 
 
@@ -44,6 +48,9 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.photogrammetry = photogrammetry
 
     def add_photogrammetry(self, photogrammetry: pd.DataFrame):
+        """
+        TODO
+        """
         if self._added_photogrammetry:
             return  # already added
         for _, row in photogrammetry.iterrows():
@@ -57,6 +64,9 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self._added_photogrammetry = True
 
     def add_sensors(self, frame: Frame = None):
+        """
+        TODO
+        """
         if frame is None:
             frame = self.vehicle
         if type(frame) is Camera:
@@ -111,42 +121,44 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
-        feature_noise = 0.01  # * 0.95  # m - sigma gaussian noise of the sensor in ray direction
+        """
+        TODO
+        """
+        feature_noise = 0.025  # this should be integrated into the actual feature vector of the lidar object
         photogrammetry_planes: List[Plane] = []
         counter = 0
         cache = []
         for _, row in self.photogrammetry.iterrows():
             counter += 1
             cache.append(row)
-            if counter % 6 == 0:
+            if counter % 9 == 0:
                 photogrammetry_planes.append(fit_plane("plane", pd.concat(cache, axis=1).T))
                 counter = 0
                 cache = []
         photogrammetry_centroids = [plane.get_offset() for plane in photogrammetry_planes]
 
+        # Has to be set in order to work
         offset = g2o.ParameterSE3Offset()
         offset.set_id(0)
         self.add_parameter(offset)
 
+        # First transform which is fixed but still contributes to the optimization DOF
         vehicle_vertex = g2o.VertexSE3()
         vehicle_vertex.set_id(lidar.id + 1000)
         vehicle_vertex.set_estimate(g2o.Isometry3d())
         vehicle_vertex.set_fixed(True)
         self.add_vertex(vehicle_vertex)
 
+        # Second transform that is subject of optimization
         lidar_vertex = g2o.VertexSE3()
         lidar_vertex.set_id(lidar.id)
         lidar_vertex.set_estimate(g2o.Isometry3d(lidar.parent.transform.rotation.as_matrix(), lidar.parent.transform.translation))
         lidar_vertex.set_fixed(False)
         self.add_vertex(lidar_vertex)
 
+        # Match the features
         neighbor = NearestNeighbors(n_neighbors=2, radius=0.4, n_jobs=4)
         neighbor.fit(photogrammetry_centroids)
-
-        # for plane in photogrammetry_planes:
-        #     t = deviation @ plane.transform
-        #     p = Plane(name=plane.name, transform=t)
-        #     lidar.features.append(p)
 
         if self.plot:
             fig = plt.figure()
@@ -174,35 +186,27 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 # Get corresponding planes and transform them into sensor coordinates using the initial guess to optimize relative to the initial guess
                 pplane: Plane = photogrammetry_planes[photogrammetry_idx]
                 splane: Plane = lidar.features[sensor_idx]
+
+                # transform into sensor coordinate system
                 splane.transform = lidar.parent.transform.inverse() @ splane.transform
                 pplane.transform = lidar.parent.transform.inverse() @ pplane.transform
-                # random = rng.normal(0, feature_noise / 2.0, size=3)
-                # d = Transform(
-                #    rotation=Rotation.from_euler("xyz", np.asarray([1, 1, 1]), degrees=True),  # + np.rad2deg(np.arcsin(random))
-                #    translation=np.array([0.1, 0.1, 0.1]),
-                #    # + pplane.get_normal() * np.mean(rng.normal(0, feature_noise * 1.0)),  # ,  # induce noise for the plane offset
-                # )
-                # splane.transform.translation = (
-                #    d @ pplane.transform
-                # ).translation  # HACK for absolute groundtruth matching here to check if solver converges
-                # splane.transform.rotation = (
-                #    d @ pplane.transform
-                # ).rotation  # HACK for absolute groundtruth matching here to check if solver converges
+
+                # unify directions
                 normal0 = pplane.get_normal()
                 if np.linalg.norm(pplane.get_offset() + normal0 * 0.1, 2) < np.linalg.norm(pplane.get_offset(), 2):
                     normal0 *= -1.0
-
                 normal1 = splane.get_normal()
                 if np.linalg.norm(splane.get_offset() + normal1 * 0.1, 2) < np.linalg.norm(splane.get_offset(), 2):
                     normal1 *= -1.0
 
+                # create measurement
                 measurement = g2o.EdgeGICP()
                 measurement.normal0 = normal0
-                # measurement.pos0 = pplane.get_offset()
-                measurement.pos0 = np.dot(pplane.get_offset(), normal0) * normal0
+                measurement.pos0 = np.dot(pplane.get_offset(), normal0) * normal0  # as hessian normal form
                 measurement.normal1 = normal1
-                # measurement.pos1 = splane.get_offset()
-                measurement.pos1 = np.dot(splane.get_offset(), normal1) * normal1
+                measurement.pos1 = np.dot(splane.get_offset(), normal1) * normal1  # as hessian normal form
+
+                # create edge
                 edge = g2o.EdgeVVGicp()
                 edge.set_id(lidar.id * 1000 + photogrammetry_idx)
                 edge.set_vertex(0, vehicle_vertex)
@@ -212,23 +216,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 edge.set_robust_kernel(g2o.RobustKernelHuber(self.robust_kernel_threshold))  # chi2 for N=3 at 2 sigma
                 self.add_edge(edge)
 
-                # vertex_point = g2o.VertexPointXYZ()
-                # vertex_point.set_estimate(np.dot(pplane.get_offset(), normal0) * normal0)
-                # vertex_point.set_id(lidar.id * 1000 + photogrammetry_idx + 300)
-                # vertex_point.set_fixed(True)
-                # self.add_vertex(vertex_point)
-
-                # edge_xyz = g2o.EdgeSE3PointXYZ()
-                # edge_xyz.set_id(lidar.id * 1000 + photogrammetry_idx + 200)
-                # edge_xyz.set_vertex(0, lidar_vertex)
-                # edge_xyz.set_vertex(1, vertex_point)
-                # edge_xyz.set_measurement(np.dot(splane.get_offset(), normal1) * normal1)
-                # edge_xyz.set_parameter_id(0, 0)
-                # edge_xyz.set_information(np.outer(normal1, normal1) / (feature_noise**2))
-                # edge_xyz.set_robust_kernel(g2o.RobustKernelHuber(3))
-                # self.add_edge(edge_xyz)
-
-                break  # for now just take the first one here. That is the closest and will most of the time be true. If not it is a seperate problem...
+                break  # Currently only the most likely match from DBSCAN is used. This must be done more clever in real applications.
 
     def _integrate_result(self, frame: Frame, id, result: Tuple[Transform, np.ndarray]):
         if type(frame) is Camera and frame.id == id:
@@ -278,9 +266,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                     covariance,
                 )
                 self._integrate_result(self.vehicle, id, result)
-
-    def __repr__(self):
-        pass
 
     def get_dof(self) -> int:
         dof: int = 0
@@ -365,7 +350,7 @@ class VehicleFactory:
                     for _, row in photogrammetry.iterrows():
                         counter += 1
                         cache.append(row)
-                        if counter % 6 == 0:
+                        if counter % 9 == 0:
                             plane = fit_plane("plane", pd.concat(cache, axis=1).T)
                             plane.transform.translation += plane.get_normal() * rng.normal(0, lidar_feature_noise)
                             plane.transform = deviation @ plane.transform
@@ -389,8 +374,8 @@ class VehicleFactory:
                 features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * camera_feature_noise
                 if camera_feature_noise:
                     features[["u", "v"]] += rng.normal(0.0, camera_feature_noise, size=features[["u", "v"]].shape)
-                # features["u"] += 0.5  # not sure if that is really true and gazebo has an offset here
-                # features["v"] += 0.5  # not sure if that is really true and gazebo has an offset here
+                # features["u"] += 0.5  # gazebo has an offset here somehow
+                # features["v"] += 0.5  # gazebo has an offset here somehow
                 initial_guess.add_child(
                     Camera(
                         name=name,
@@ -429,7 +414,10 @@ def detect_planes(pointcloud: pd.DataFrame):
     return planes
 
 
-def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 100, expected_noise=0.01, linear_refinement=True) -> Plane:
+def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 200, expected_noise=0.02, linear_refinement=True) -> Plane:
+    """
+    TODO
+    """
     missing = [required_column for required_column in ["x", "y", "z"] if required_column not in points.columns]
     assert len(missing) == 0, f"missing column(s): {missing}"
     points = points[["x", "y", "z"]]
@@ -459,6 +447,9 @@ def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 100, exp
 
 
 def fit_plane(name: str, points) -> Plane:
+    """
+    TODO
+    """
     if type(points) is pd.DataFrame:
         missing = [required_column for required_column in ["x", "y", "z"] if required_column not in points.columns]
         assert len(missing) == 0, f"missing column(s): {missing}"
@@ -474,24 +465,23 @@ def fit_plane(name: str, points) -> Plane:
 
 
 def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool = False):
+    """
+    TODO
+    """
     if len(optimizer.edges()) == 0:
         raise ValueError("No Edges!")
     if not silent:
         print(optimizer.vehicle.as_dataframe(only_leafs=True, relative_coordinates=False))
 
     dof = optimizer.get_dof()
-    assert dof >= 0, "There is not DOF for a unique result"
-    # J = []
-    # for edge in optimizer.edges():
-    #    J.append(edge.get_jacobian())
-    # J = np.vstack(J)
+    # assert dof >= 0, "There is not DOF for a unique result"
+
     errors = []
     for edge in optimizer.edges():
         errors.append(edge.error() * np.sqrt(np.diag(edge.information())))
     errors = np.array(errors).flatten()
     z = 3.0
     C = 1.4826 * (1 + 5 / dof)
-    # sigma_estimate = np.median(np.absolute(errors - np.median(errors)))
     sigma_estimate = np.sqrt(np.median(np.square(errors)))
     threshold = z / np.sqrt(dof)
     robust_estimate_corrected = C * sigma_estimate
@@ -499,14 +489,14 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
     robust_global_test_message = "OK"
     if robust_estimate_corrected > 1 + threshold:
         robust_global_test_passed = False
-        robust_global_test_message = "TOO HIGH"
+        robust_global_test_message = "FAILED - TOO HIGH"
     if robust_estimate_corrected < 1 - threshold:
         robust_global_test_passed = False
-        robust_global_test_message = "TOO LOW"
+        robust_global_test_message = "FAILED - TOO LOW"
 
     active_chi2 = optimizer.active_chi2()
     robust_chi2 = optimizer.active_robust_chi2()
-    mean, variance, skew, kurtosis = chi2.stats(df=dof, moments="mvsk")
+    p_value_center = chi2.sf(dof, df=dof)
     p_value = chi2.sf(active_chi2, df=dof)  # is the chi2_score
     chi2_global_test_passed = True
     alpha = 0.01
@@ -523,9 +513,10 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
         "kernel_quotient": 1.0 - robust_chi2 / active_chi2,
         "number_of_edges": len(optimizer.edges()),
         "dof": dof,
-        # "reduced_chi2": active_chi2 / dof,  # you want this to be close to 1
-        # "reduced_sigma": np.sqrt(2 / dof),
+        "reduced_chi2": active_chi2 / dof,  # you want this to be close to 1
+        "reduced_sigma": np.sqrt(2 / dof),
         "alpha": alpha,
+        "chi2_score_center": p_value_center,
         "chi2_score": p_value,
         "chi2_global_test_passed": chi2_global_test_passed,
         "chi2_global_test_message": chi2_global_test_comment,
@@ -616,7 +607,10 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
     return report
 
 
-def main(vehicle: Vehicle, dataset_name: str, camera_feature_noise=1.0, lidar_feature_noise=0.01, silent=False, plot=False) -> Tuple[Vehicle, dict]:
+def main(vehicle: Vehicle, dataset_name: str, post_processing=False, silent=False, plot=False) -> Tuple[Vehicle, dict]:
+    """
+    TODO
+    """
     optimizer = ExtendedSparseOptimizer(
         vehicle=vehicle,
         algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
@@ -630,17 +624,20 @@ def main(vehicle: Vehicle, dataset_name: str, camera_feature_noise=1.0, lidar_fe
     for i in range(2):
         optimizer.initialize_optimization()
         optimizer.optimize(1000)
+        if (  # WARNING: post processing shifts the estimated noise of the observed data if actual points from the distribution are deleted instead of outliers.
+            not post_processing
+        ):
+            break
         report = evaluate(optimizer=optimizer, silent=True, plot=False)
-        break
-        # if report["global_test_passed"]:
-        #    break
-        # optimizer.cut(0.05)
-        # for edge in optimizer.edges():
-        #    if edge.chi2() < 3.88**2:  # inside 2 sigma for this plane on a chi2 distribution for N=3
-        #        continue
-        #    optimizer.remove_edge(edge)
-        # if optimizer.get_dof() < 0:
-        #    return None, None
+        if report["global_test_passed"]:
+            break
+        optimizer.cut(0.05)  # cut the badest 5 % of the edges
+        for edge in optimizer.edges():
+            if edge.chi2() < CHI2_SIGMA_3**2:  # inside 3 sigma for this plane on a chi2 distribution for N=3
+                continue
+            optimizer.remove_edge(edge)
+        if optimizer.get_dof() < 0:  # unable to optimize
+            return None, None
     report = evaluate(optimizer=optimizer, silent=silent, plot=plot)
     return vehicle, report
 
@@ -661,5 +658,6 @@ if __name__ == "__main__":
         ),
         camera_feature_noise=1.0,
         lidar_feature_noise=0.01,
+        use_ideal_features=True,
     )
-    vehicle, report = main(vehicle=vehicle, dataset_name=args.dataset, silent=False, plot=False)
+    vehicle, report = main(vehicle=vehicle, dataset_name=args.dataset, silent=False, plot=True)

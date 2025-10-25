@@ -18,7 +18,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch.substitutions import LaunchConfiguration, Command
 from launch.event_handlers import OnProcessExit
 
-WORLD = "single_plane_bottom.urdf.xacro"
+WORLD = "boxes_circle_noise.urdf.xacro"
 ROBOT = "vehicle_only_camera.urdf.xacro"
 
 camera_names = ["front_camera_wide", "top_view_camera_front", "top_view_camera_rear", "top_view_camera_left", "top_view_camera_right"]
