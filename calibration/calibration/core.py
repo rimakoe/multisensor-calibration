@@ -24,6 +24,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         vehicle: Vehicle,
         algorithm: g2o.OptimizationAlgorithm = None,
         photogrammetry: pd.DataFrame = None,
+        robust_kernel_threshold: float = 3.88,
         plot: bool = False,
         silent: bool = True,
     ):
@@ -33,6 +34,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.set_algorithm(algorithm)
         self.vehicle = vehicle
         self.photogrammetry = photogrammetry
+        self.robust_kernel_threshold = robust_kernel_threshold
         self.plot = plot
         self.silent = silent
         self._added_photogrammetry = False
@@ -109,13 +111,11 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
-        feature_noise = 0.01  # m - sigma gaussian noise of the sensor in ray direction
-        # TODO this is calculated for every lidar, make this only once outside somewhere
-        photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
+        feature_noise = 0.01  # * 0.95  # m - sigma gaussian noise of the sensor in ray direction
         photogrammetry_planes: List[Plane] = []
         counter = 0
         cache = []
-        for _, row in photogrammetry.iterrows():
+        for _, row in self.photogrammetry.iterrows():
             counter += 1
             cache.append(row)
             if counter % 6 == 0:
@@ -198,19 +198,18 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
                 measurement = g2o.EdgeGICP()
                 measurement.normal0 = normal0
-                measurement.pos0 = pplane.get_offset()
-                # measurement.pos0 = np.dot(pplane.get_offset(), normal0) * normal0
+                # measurement.pos0 = pplane.get_offset()
+                measurement.pos0 = np.dot(pplane.get_offset(), normal0) * normal0
                 measurement.normal1 = normal1
-                measurement.pos1 = splane.get_offset()
-                # measurement.pos1 = np.dot(splane.get_offset(), normal1) * normal1
-                info = np.eye(3) / (feature_noise**2)
+                # measurement.pos1 = splane.get_offset()
+                measurement.pos1 = np.dot(splane.get_offset(), normal1) * normal1
                 edge = g2o.EdgeVVGicp()
                 edge.set_id(lidar.id * 1000 + photogrammetry_idx)
                 edge.set_vertex(0, vehicle_vertex)
                 edge.set_vertex(1, lidar_vertex)
                 edge.set_measurement(measurement)
-                edge.set_information(info)
-                edge.set_robust_kernel(g2o.RobustKernelHuber(3))
+                edge.set_information(np.eye(3) / (feature_noise**2))
+                edge.set_robust_kernel(g2o.RobustKernelHuber(self.robust_kernel_threshold))  # chi2 for N=3 at 2 sigma
                 self.add_edge(edge)
 
                 # vertex_point = g2o.VertexPointXYZ()
@@ -250,6 +249,17 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         for child in frame.children:
             self._integrate_result(child, id, result)
 
+    def cut(self, percent: float = 0.1):
+        chi2s = []
+        edges = []
+        for edge in self.edges():
+            chi2s.append(edge.chi2())
+            edges.append(edge)
+        df = pd.DataFrame(data={"chi2": chi2s, "edge": edges})
+        df.sort_values("chi2", inplace=True)
+        for edge in df.iloc[int((1 - percent) * len(edges)) :]["edge"]:
+            self.remove_edge(edge)
+
     def optimize(self, iterations=1000):
         super().optimize(iterations)
         for id, vertex in self.vertices().items():
@@ -285,9 +295,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 dof += 3
                 continue
         for id, vertex in self.vertices().items():
-            if vertex.fixed():
-                continue
-            if type(vertex) is g2o.VertexSE3Expmap or type(vertex) is g2o.VertexSE3:
+            if type(vertex) is g2o.VertexSE3Expmap or type(vertex) is g2o.VertexSE3:  # subtract the fixed one from ICP on purpose here as well
                 dof -= 6
                 continue
         return dof
@@ -351,7 +359,7 @@ class VehicleFactory:
 
                 features: List[Plane] = []
                 if use_ideal_features:
-                    photogrammetry = read_obc("/" + os.path.join("home", "workspace", "datasets", "C4L5", "photogrammetry.obc"))
+                    photogrammetry = read_obc(os.path.join(self.directory_to_datasets, dataset_name, "photogrammetry.obc"))
                     counter = 0
                     cache = []
                     for _, row in photogrammetry.iterrows():
@@ -359,8 +367,8 @@ class VehicleFactory:
                         cache.append(row)
                         if counter % 6 == 0:
                             plane = fit_plane("plane", pd.concat(cache, axis=1).T)
-                            plane.transform = deviation @ plane.transform
                             plane.transform.translation += plane.get_normal() * rng.normal(0, lidar_feature_noise)
+                            plane.transform = deviation @ plane.transform
                             features.append(plane)
                             counter = 0
                             cache = []
@@ -473,28 +481,57 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
 
     dof = optimizer.get_dof()
     assert dof >= 0, "There is not DOF for a unique result"
+    # J = []
+    # for edge in optimizer.edges():
+    #    J.append(edge.get_jacobian())
+    # J = np.vstack(J)
+    errors = []
+    for edge in optimizer.edges():
+        errors.append(edge.error() * np.sqrt(np.diag(edge.information())))
+    errors = np.array(errors).flatten()
+    z = 3.0
+    C = 1.4826 * (1 + 5 / dof)
+    # sigma_estimate = np.median(np.absolute(errors - np.median(errors)))
+    sigma_estimate = np.sqrt(np.median(np.square(errors)))
+    threshold = z / np.sqrt(dof)
+    robust_estimate_corrected = C * sigma_estimate
+    robust_global_test_passed = True
+    robust_global_test_message = "OK"
+    if robust_estimate_corrected > 1 + threshold:
+        robust_global_test_passed = False
+        robust_global_test_message = "TOO HIGH"
+    if robust_estimate_corrected < 1 - threshold:
+        robust_global_test_passed = False
+        robust_global_test_message = "TOO LOW"
 
     active_chi2 = optimizer.active_chi2()
     robust_chi2 = optimizer.active_robust_chi2()
     mean, variance, skew, kurtosis = chi2.stats(df=dof, moments="mvsk")
-    p_value = chi2.sf(active_chi2, df=dof)
-    global_test_comment = "OK - a priori estimates seem to align with the optimization result"
-    if p_value < 0.05:
-        global_test_comment = "FAILED - a priori sensor noise seems to be too low"
-    if p_value > 0.95:
-        global_test_comment = "FAILED - a priori sensor noise seems to be too high"
+    p_value = chi2.sf(active_chi2, df=dof)  # is the chi2_score
+    chi2_global_test_passed = True
+    alpha = 0.01
+    chi2_global_test_comment = "OK"
+    if p_value < alpha:
+        chi2_global_test_passed = False
+        chi2_global_test_comment = "FAILED - TOO LOW"
+    if p_value > 1 - alpha:
+        chi2_global_test_passed = False
+        chi2_global_test_comment = "FAILED - TOO HIGH"
     report = {
         "robust_chi2": robust_chi2,
         "active_chi2": active_chi2,
         "kernel_quotient": 1.0 - robust_chi2 / active_chi2,
         "number_of_edges": len(optimizer.edges()),
         "dof": dof,
-        "reduced_chi2": active_chi2 / dof,  # you want this to be close to 1
-        "reduced_sigma": np.sqrt(2 / dof),
-        "skew": skew,
-        "kurtosis": kurtosis,
-        "p-value": p_value,
-        "chi2_global_test": global_test_comment,
+        # "reduced_chi2": active_chi2 / dof,  # you want this to be close to 1
+        # "reduced_sigma": np.sqrt(2 / dof),
+        "alpha": alpha,
+        "chi2_score": p_value,
+        "chi2_global_test_passed": chi2_global_test_passed,
+        "chi2_global_test_message": chi2_global_test_comment,
+        "robust_score": robust_estimate_corrected,
+        "robust_global_test_passed": robust_global_test_passed,
+        "robust_global_test_message": robust_global_test_message,
     }
     if not silent:
         print("")
@@ -579,19 +616,32 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
     return report
 
 
-def main(vehicle: Vehicle, dataset_name: str, silent=False, plot=False) -> Tuple[Vehicle, dict]:
+def main(vehicle: Vehicle, dataset_name: str, camera_feature_noise=1.0, lidar_feature_noise=0.01, silent=False, plot=False) -> Tuple[Vehicle, dict]:
     optimizer = ExtendedSparseOptimizer(
         vehicle=vehicle,
         algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
         photogrammetry=read_obc(os.path.join(get_dataset_directory(), dataset_name, "photogrammetry.obc")),
+        robust_kernel_threshold=3.88,
         plot=plot,
         silent=silent,
     )
     optimizer.add_sensors()
-    optimizer.initialize_optimization()
     optimizer.set_verbose(False)
-    optimizer.optimize(10000)
-    report = evaluate(optimizer, silent=silent, plot=plot)
+    for i in range(2):
+        optimizer.initialize_optimization()
+        optimizer.optimize(1000)
+        report = evaluate(optimizer=optimizer, silent=True, plot=False)
+        break
+        # if report["global_test_passed"]:
+        #    break
+        # optimizer.cut(0.05)
+        # for edge in optimizer.edges():
+        #    if edge.chi2() < 3.88**2:  # inside 2 sigma for this plane on a chi2 distribution for N=3
+        #        continue
+        #    optimizer.remove_edge(edge)
+        # if optimizer.get_dof() < 0:
+        #    return None, None
+    report = evaluate(optimizer=optimizer, silent=silent, plot=plot)
     return vehicle, report
 
 
