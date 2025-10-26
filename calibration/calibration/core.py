@@ -11,11 +11,17 @@ from calibration.datatypes import *
 from calibration.utils import *
 from calibration.plots import *
 
+np.set_printoptions(edgeitems=30, linewidth=1000000)
+
 DEBUG = False
 
-CHI2_SIGMA_1 = 1.88
-CHI2_SIGMA_2 = 2.83
-CHI2_SIGMA_3 = 3.88
+# percentiles for the chi2 distribution for 3 and 2 dof
+
+CHI2_SIGMA2_DOF2 = np.sqrt(9.21)
+CHI2_SIGMA3_DOF2 = np.sqrt(13.815)
+
+CHI2_SIGMA2_DOF3 = np.sqrt(11.345)
+CHI2_SIGMA3_DOF3 = np.sqrt(16.266)
 
 rng = np.random.default_rng(0)  # one reproducible stream
 
@@ -28,7 +34,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         vehicle: Vehicle,
         algorithm: g2o.OptimizationAlgorithm = None,
         photogrammetry: pd.DataFrame = None,
-        robust_kernel_threshold: float = 3.88,
         plot: bool = False,
         silent: bool = True,
     ):
@@ -38,7 +43,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.set_algorithm(algorithm)
         self.vehicle = vehicle
         self.photogrammetry = photogrammetry
-        self.robust_kernel_threshold = robust_kernel_threshold
         self.plot = plot
         self.silent = silent
         self._added_photogrammetry = False
@@ -117,14 +121,14 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             edge.set_information(np.diag(1.0 / sigma**2))  # no effect right now
             edge.set_parameter_id(0, camera.id)
             edge.set_id(camera.id * 1000 + marker_id * 10)
-            edge.set_robust_kernel(g2o.RobustKernelHuber(3 * np.mean(sigma)))
+            edge.set_robust_kernel(g2o.RobustKernelHuber(CHI2_SIGMA3_DOF2))
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
         """
         TODO
         """
-        feature_noise = 0.025  # this should be integrated into the actual feature vector of the lidar object
+        feature_noise = 0.01  # this should be integrated into the actual feature vector of the lidar object
         photogrammetry_planes: List[Plane] = []
         counter = 0
         cache = []
@@ -213,7 +217,7 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
                 edge.set_vertex(1, lidar_vertex)
                 edge.set_measurement(measurement)
                 edge.set_information(np.eye(3) / (feature_noise**2))
-                edge.set_robust_kernel(g2o.RobustKernelHuber(self.robust_kernel_threshold))  # chi2 for N=3 at 2 sigma
+                edge.set_robust_kernel(g2o.RobustKernelHuber(CHI2_SIGMA3_DOF3))
                 self.add_edge(edge)
 
                 break  # Currently only the most likely match from DBSCAN is used. This must be done more clever in real applications.
@@ -225,14 +229,38 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             frame.covariance = self._convention_transform.inverse().adjoint().T @ covariance @ self._convention_transform.inverse().adjoint()
             # frame.covariance = covariance # Only if we do not want the covariance to be rotated to fit to the convention and thus given in camera coords
             if self.plot:
-                plot_heatmap_compact(title=f"{frame.name} covariance matrix", frame=frame)
+                pearson = compute_pearson(covariance=covariance)
+                plot_heatmap_compact(title=f"{frame.name} pearson matrix", map=pearson)
+                xs = []
+                ys = []
+                camera_ids = []
+                marker_ids = []
+                for edge in self.edges():
+                    if type(edge) is g2o.EdgeProjectXYZ2UV:
+                        error = edge.error()
+                        information = edge.information()
+                        normed_error = error @ np.sqrt(information)
+                        xs.append(normed_error[0])
+                        ys.append(normed_error[1])
+                        marker_ids.append(edge.vertex(0).id())
+                        camera_ids.append(edge.vertex(1).id())
+                df = pd.DataFrame(
+                    {
+                        "camera id": camera_ids,
+                        "marker id": marker_ids,
+                        "u": xs,
+                        "v": ys,
+                    }
+                )
+                plot_residual(df, frame)
             return
         if type(frame) is Lidar and frame.id == id:
             transform, covariance = result
             frame.covariance = covariance
             frame.transform = transform
             if self.plot:
-                plot_heatmap_compact(title=f"{frame.name} covariance matrix", frame=frame)
+                pearson = compute_pearson(covariance)
+                plot_heatmap_compact(title=f"{frame.name} pearson matrix", map=pearson)
             return
         for child in frame.children:
             self._integrate_result(child, id, result)
@@ -533,77 +561,6 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
         print("============================================================")
         print("")
 
-    # gather distributions
-    if plot:
-        # reproject_error_minimization distribution
-        xs = []
-        ys = []
-        camera_ids = []
-        marker_ids = []
-        for edge in optimizer.edges():
-            if type(edge) is g2o.EdgeProjectXYZ2UV:
-                xs.append(edge.error()[0])
-                ys.append(edge.error()[1])
-                marker_ids.append(edge.vertex(0).id())
-                camera_ids.append(edge.vertex(1).id())
-        df = pd.DataFrame(
-            {
-                "camera id": camera_ids,
-                "marker id": marker_ids,
-                "u": xs,
-                "v": ys,
-            }
-        )
-        # df.boxplot(column="residuals", by="camera id")
-        # fig, axes = plt.subplots()
-        # sns.violinplot(
-        #    data=df[["x", "y"]].melt().assign(camera_id=np.hstack([df["camera id"], df["camera id"]])),
-        #    x="camera_id",
-        #    y="value",
-        #    hue="variable",
-        #    split=True,
-        #    gap=0.1,
-        #    inner="point",
-        # )
-        # expected_noise = pd.DataFrame(
-        #    {
-        #        "x": np.random.normal(0.0, camera_feature_noise, size=(1000)),
-        #        "y": np.random.normal(0.0, camera_feature_noise, size=(1000)),
-        #        "camera id": np.zeros((1000,)),
-        #    }
-        # )
-        # df = pd.concat([df, expected_noise])
-        camera_feature_noise = 1.0
-
-        x = np.linspace(-5, 5, 100)
-        y = np.linspace(-5, 5, 100)
-        X, Y = np.meshgrid(x, y)
-        Z = norm.pdf(X, 0, camera_feature_noise) * norm.pdf(Y, 0, camera_feature_noise)
-        sigma_levels = [3, 2, 1, 0]
-        probs = [1 - np.exp(-(s**2) / 2) for s in sigma_levels]
-
-        # Convert probability mass → contour heights
-        # Find the Z value that encloses given probability
-        def find_contour_level(pdf, prob):
-            sorted_vals = np.sort(pdf.ravel())[::-1]
-            cumsum = np.cumsum(sorted_vals)
-            cumsum /= cumsum[-1]
-            return sorted_vals[np.searchsorted(cumsum, prob)]
-
-        contour_levels = [find_contour_level(Z, p) for p in probs]
-        g = sns.jointplot(
-            data=df,
-            x="u",
-            y="v",
-            hue="camera id",
-            fill=True,
-            kind="kde",
-        )
-        g.ax_joint.contour(X, Y, Z, levels=contour_levels, colors="black", linewidths=1, linestyles="--", alpha=0.5)
-        perfect_distribution = np.linspace(-5, 5, 100)
-        g.ax_marg_x.plot(perfect_distribution, norm.pdf(perfect_distribution, 0, camera_feature_noise), color="black", ls="--", lw=1, alpha=0.5)
-        g.ax_marg_y.plot(norm.pdf(perfect_distribution, 0, camera_feature_noise), perfect_distribution, color="black", ls="--", lw=1, alpha=0.5)
-        plt.show(block=True)
     return report
 
 
@@ -615,7 +572,6 @@ def main(vehicle: Vehicle, dataset_name: str, post_processing=False, silent=Fals
         vehicle=vehicle,
         algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),
         photogrammetry=read_obc(os.path.join(get_dataset_directory(), dataset_name, "photogrammetry.obc")),
-        robust_kernel_threshold=3.88,
         plot=plot,
         silent=silent,
     )
@@ -633,7 +589,14 @@ def main(vehicle: Vehicle, dataset_name: str, post_processing=False, silent=Fals
             break
         optimizer.cut(0.05)  # cut the badest 5 % of the edges
         for edge in optimizer.edges():
-            if edge.chi2() < CHI2_SIGMA_3**2:  # inside 3 sigma for this plane on a chi2 distribution for N=3
+            threshold: float = None
+            if type(edge) is g2o.EdgeVVGicp:
+                threshold = CHI2_SIGMA3_DOF3
+            if type(edge) is g2o.EdgeProjectXYZ2UV:
+                threshold = CHI2_SIGMA3_DOF2
+            if threshold is None:
+                continue
+            if edge.chi2() < threshold**2:  # inside 3 sigma for this plane on a chi2 distribution for N=3
                 continue
             optimizer.remove_edge(edge)
         if optimizer.get_dof() < 0:  # unable to optimize

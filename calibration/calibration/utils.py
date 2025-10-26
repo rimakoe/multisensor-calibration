@@ -59,6 +59,17 @@ def read_obc(filepath: str) -> pd.DataFrame:
     return pd.read_csv(filepath_or_buffer=filepath, sep="\t")
 
 
+def compute_pearson(covariance: np.ndarray):
+    assert covariance.shape == (6, 6)
+    pearson = np.zeros((6, 6))
+    for i in range(6):
+        for j in range(6):
+            if i == j:
+                pearson[i, j] = 1.0
+            pearson[i, j] = covariance[i, j] / np.sqrt(covariance[i, i] * covariance[j, j])
+    return pearson
+
+
 def skew(v: np.ndarray):
     assert v.size == 3
     assert v.shape == (3,) or v.shape == (3, 1)
