@@ -157,6 +157,37 @@ def create_plane(
     return plane
 
 
+def create_box(id: int, transform: Transform = Transform()) -> Frame:
+    n = 3
+    m = 3
+    module = Frame(name=f"cube{id}", transform=transform)
+    module.add_child(
+        create_plane(
+            name="p" + str(id * 3 + 0),
+            size=np.array([1.0, 1.0, 0.001]),
+            transform=Transform(translation=np.array([0.0, 0.0, 0.0]), rotation=Rotation.from_euler("xyz", [0.0, 0.0, 0.0], degrees=True)),
+            marker_descriptions=create_nxm_marker_descriptions(start_id=3 * id * n * m, n=n, m=m),
+        )
+    )
+    module.add_child(
+        create_plane(
+            name="p" + str(id * 3 + 1),
+            size=np.array([1.0, 1.0, 0.001]),
+            transform=Transform(translation=np.array([0.0, 0.5, 0.5]), rotation=Rotation.from_euler("xyz", [90.0, 0.0, 0.0], degrees=True)),
+            marker_descriptions=create_nxm_marker_descriptions(start_id=(3 * id + 1) * n * m, n=n, m=m),
+        )
+    )
+    module.add_child(
+        create_plane(
+            name="p" + str(id * 3 + 2),
+            size=np.array([1.0, 1.0, 0.001]),
+            transform=Transform(translation=np.array([0.5, 0.0, 0.5]), rotation=Rotation.from_euler("xyz", [0.0, -90.0, 0.0], degrees=True)),
+            marker_descriptions=create_nxm_marker_descriptions(start_id=(3 * id + 2) * n * m, n=n, m=m),
+        )
+    )
+    return module
+
+
 def create_module(id: int, transform: Transform = Transform()) -> Frame:
     module = Frame(name=f"mod{id}", transform=transform)
     module.add_child(
