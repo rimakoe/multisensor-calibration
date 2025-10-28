@@ -39,20 +39,89 @@
             "program": "${workspaceFolder}/calibration/calibration/core.py",
             "args": [
                 "RefLidar",
-                //"AnotherSensor",
-                "--dataset=C1L1_triple_module_front",
+                "--dataset=BF",
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "test",
+            "name": " - Camera",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/calibration/tests/test.py",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "FrontCameraWide",
+                "--dataset=CS",
+            ],
             "console": "integratedTerminal"
         },
         {
-            "name": "sensitivity",
+            "name": "DPBF - Camera",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "FrontCameraWide",
+                "--dataset=DPBF",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "DPLF - Camera",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "FrontCameraWide",
+                "--dataset=DPLF",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "CS - Camera",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "FrontCameraWide",
+                "--dataset=CS",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "BF - Lidar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "RefLidar",
+                "--dataset=BF",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "BC - Lidar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "RefLidar",
+                "--dataset=BC",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "BC2 - Lidar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/calibration/calibration/core.py",
+            "args": [
+                "RefLidar",
+                "--dataset=BC2",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "hessian_validation",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/calibration/calibration/evaluation/sensitivity_analysis.py",
@@ -66,7 +135,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "monte_carlo",
+            "name": "score_validation",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/calibration/calibration/evaluation/monte_carlo.py",

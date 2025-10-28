@@ -24,12 +24,12 @@ def feature_sensitivity():
     df = pd.DataFrame()
     df2 = pd.DataFrame()
     l = []
-    for i in tqdm.tqdm(range(5000)):
+    for i in tqdm.tqdm(range(1000)):
         # np.random.seed(i)
         features = pd.DataFrame.from_dict(
             json.load(open(os.path.join(sensor_folder, "detections.json"))),
         )
-        features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * camera_feature_noise * 2.0  # give really sigma here
+        features[["su", "sv"]] = np.ones(features[["u", "v"]].shape) * camera_feature_noise  # give really sigma here
         camera = Camera(
             name=sensor_name,
             id=1000,
@@ -107,18 +107,24 @@ def feature_sensitivity():
             ).T
             l.append((o.loc["prec"] - o.loc["delta"]).to_numpy().flatten())
     l = np.array(l)
+    x = list(range(10, 1000, 10))
+    plt.figure(figsize=(3.0, 6.0))
     plt.subplot(211)
-    plt.title("difference to covariances from remaining hessian")
-    plt.semilogx(l[:, :3] * 1000.0)
+    # plt.title("difference to covariances from remaining hessian")
+    plt.semilogx(x, l[:, :3])
     plt.legend(["x", "y", "z"])
-    plt.ylabel("translation [mm]")
-    plt.grid(True)
+    plt.ylabel("$\\Delta \\nu$ [m]")
+    plt.grid(True, which="major")
+    plt.minorticks_on()
+    plt.grid(True, which="minor", linestyle=":")
     plt.subplot(212)
-    plt.semilogx(l[:, 3:])
+    plt.semilogx(x, l[:, 3:])
     plt.legend(["x", "y", "z"])
-    plt.xlabel("iterations x 10")
-    plt.ylabel("rotvec [rad]")
-    plt.grid(True)
+    plt.xlabel("iterations")
+    plt.ylabel("$\\Delta \\omega$ [rad]")
+    plt.grid(True, which="major")
+    plt.minorticks_on()
+    plt.grid(True, which="minor", linestyle=":")
     plt.show(block=True)
 
 
