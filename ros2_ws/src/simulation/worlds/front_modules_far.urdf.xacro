@@ -1,0 +1,543 @@
+<?xml version="1.0"?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+	<xacro:include filename="utils.xacro" />
+	<world name="empty_world">
+		<physics name="1ms" type="ignored">
+			<max_step_size>0.001</max_step_size>
+			<real_time_factor>1.0</real_time_factor>
+		</physics>
+		<plugin
+			filename="gz-sim-physics-system"
+			name="gz::sim::systems::Physics">
+		</plugin>
+		<plugin
+			filename="gz-sim-sensors-system"
+			name="gz::sim::systems::Sensors">
+		</plugin>
+		<plugin
+			filename="gz-sim-user-commands-system"
+			name="gz::sim::systems::UserCommands">
+		</plugin>
+		<plugin
+			filename="gz-sim-scene-broadcaster-system"
+			name="gz::sim::systems::SceneBroadcaster">
+		</plugin>
+
+
+		<gui fullscreen="0">
+			<!-- 3D scene -->
+			<plugin filename="GzScene3D" name="3D View">
+				<ignition-gui>
+					<title>3D View</title>
+					<property type="bool" key="showTitleBar">false</property>
+					<property type="string" key="state">docked</property>
+				</ignition-gui>
+
+				<engine>ogre2</engine>
+				<scene>scene</scene>
+				<ambient_light>1.0 1.0 1.0</ambient_light>
+				<background_color>0.8 0.8 0.8</background_color>
+				<camera_pose>-6 0 6 0 0.5 0</camera_pose>
+			</plugin>
+			<!-- World control -->
+			<plugin filename="WorldControl" name="World control">
+				<ignition-gui>
+					<title>World control</title>
+					<property type="bool" key="showTitleBar">false</property>
+					<property type="bool" key="resizable">false</property>
+					<property type="double" key="height">72</property>
+					<property type="double" key="width">121</property>
+					<property type="double" key="z">1</property>
+
+					<property type="string" key="state">floating</property>
+					<anchors target="3D View">
+						<line own="left" target="left" />
+						<line own="bottom" target="bottom" />
+					</anchors>
+				</ignition-gui>
+
+				<play_pause>true</play_pause>
+				<step>true</step>
+				<start_paused>true</start_paused>
+				<service>/world/world_demo/control</service>
+				<stats_topic>/world/world_demo/stats</stats_topic>
+			</plugin>
+			<!-- World statistics -->
+			<plugin filename="WorldStats" name="World stats">
+				<ignition-gui>
+					<title>World stats</title>
+					<property type="bool" key="showTitleBar">false</property>
+					<property type="bool" key="resizable">false</property>
+					<property type="double" key="height">110</property>
+					<property type="double" key="width">290</property>
+					<property type="double" key="z">1</property>
+
+					<property type="string" key="state">floating</property>
+					<anchors target="3D View">
+						<line own="right" target="right" />
+						<line own="bottom" target="bottom" />
+					</anchors>
+				</ignition-gui>
+
+				<sim_time>true</sim_time>
+				<real_time>true</real_time>
+				<real_time_factor>true</real_time_factor>
+				<iterations>true</iterations>
+				<topic>/world/world_demo/stats</topic>
+
+			</plugin>
+			<!-- Entity tree -->
+			<plugin filename="EntityTree" name="Entity tree">
+			</plugin>
+
+			<plugin filename="ImageDisplay" name="Image Display">
+			</plugin>
+
+		</gui>
+		<light type="directional" name="sun">
+			<cast_shadows>true</cast_shadows>
+			<pose>0 0 10 0 0 0</pose>
+			<diffuse>0.8 0.8 0.8 1</diffuse>
+			<specular>0.2 0.2 0.2 1</specular>
+			<attenuation>
+				<range>1000</range>
+				<constant>0.9</constant>
+				<linear>0.01</linear>
+				<quadratic>0.001</quadratic>
+			</attenuation>
+			<direction>-0.5 0.1 -0.9</direction>
+		</light>
+		<model name="ground_plane">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry>
+						<plane>
+							<normal>0 0 1</normal>
+							<size>100 100</size>
+						</plane>
+					</geometry>
+				</collision>
+				<visual name="visual">
+					<geometry>
+						<plane>
+							<normal>0 0 1</normal>
+							<size>100 100</size>
+						</plane>
+					</geometry>
+					<material>
+						<ambient>0.8 0.8 0.8 1</ambient>
+						<diffuse>0.8 0.8 0.8 1</diffuse>
+						<specular>0.8 0.8 0.8 1</specular>
+					</material>
+				</visual>
+			</link>
+		</model>
+		    <model name="p0">
+         <static>true</static>
+         <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+         <link name="p0_link">
+             <visual name="p0_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 1.7 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p0_m0">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m0" id="0" parent_link="p0_link" x="0.25" y="-0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p0_m1">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m1" id="1" parent_link="p0_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p0_m2">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m2" id="2" parent_link="p0_link" x="0.25" y="0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p0_m3">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m3" id="3" parent_link="p0_link" x="0.0" y="-0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p0_m4">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m4" id="4" parent_link="p0_link" x="0.0" y="0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p0_m5">
+        <static>true</static>
+        <pose>19.9 0.0 1.75 3.141592653589793 -1.0471975511965979 3.141592653589793</pose>
+        <xacro:marker_macro name="m5" id="5" parent_link="p0_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1">
+         <static>true</static>
+         <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+         <link name="p1_link">
+             <visual name="p1_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p1_m6">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m6" id="6" parent_link="p1_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1_m7">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m7" id="7" parent_link="p1_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1_m8">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m8" id="8" parent_link="p1_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1_m9">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m9" id="9" parent_link="p1_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1_m10">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m10" id="10" parent_link="p1_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p1_m11">
+        <static>true</static>
+        <pose>20.0 0.4 1.0 -1.5707963267948966 0.0 2.0071286397934784</pose>
+        <xacro:marker_macro name="m11" id="11" parent_link="p1_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2">
+         <static>true</static>
+         <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+         <link name="p2_link">
+             <visual name="p2_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p2_m12">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m12" id="12" parent_link="p2_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2_m13">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m13" id="13" parent_link="p2_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2_m14">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m14" id="14" parent_link="p2_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2_m15">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m15" id="15" parent_link="p2_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2_m16">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m16" id="16" parent_link="p2_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p2_m17">
+        <static>true</static>
+        <pose>20.0 -0.4 1.0 1.5707963267948966 0.0 -2.0071286397934784</pose>
+        <xacro:marker_macro name="m17" id="17" parent_link="p2_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3">
+         <static>true</static>
+         <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+         <link name="p3_link">
+             <visual name="p3_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 1.7 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p3_m18">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m18" id="18" parent_link="p3_link" x="0.25" y="-0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3_m19">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m19" id="19" parent_link="p3_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3_m20">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m20" id="20" parent_link="p3_link" x="0.25" y="0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3_m21">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m21" id="21" parent_link="p3_link" x="0.0" y="-0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3_m22">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m22" id="22" parent_link="p3_link" x="0.0" y="0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p3_m23">
+        <static>true</static>
+        <pose>6.913397459621556 2.45 1.7499999999999996 -3.141592653589793 -1.047197551196598 -2.617993877991495</pose>
+        <xacro:marker_macro name="m23" id="23" parent_link="p3_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4">
+         <static>true</static>
+         <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+         <link name="p4_link">
+             <visual name="p4_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p4_m24">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m24" id="24" parent_link="p4_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4_m25">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m25" id="25" parent_link="p4_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4_m26">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m26" id="26" parent_link="p4_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4_m27">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m27" id="27" parent_link="p4_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4_m28">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m28" id="28" parent_link="p4_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p4_m29">
+        <static>true</static>
+        <pose>6.8 2.8464101615137753 0.9999999999999998 -1.5707963267948963 0.0 2.5307274153917776</pose>
+        <xacro:marker_macro name="m29" id="29" parent_link="p4_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5">
+         <static>true</static>
+         <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+         <link name="p5_link">
+             <visual name="p5_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p5_m30">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m30" id="30" parent_link="p5_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5_m31">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m31" id="31" parent_link="p5_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5_m32">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m32" id="32" parent_link="p5_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5_m33">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m33" id="33" parent_link="p5_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5_m34">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m34" id="34" parent_link="p5_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p5_m35">
+        <static>true</static>
+        <pose>7.2 2.1535898384862247 0.9999999999999998 1.5707963267948963 -2.220446049250313e-16 -1.48352986419518</pose>
+        <xacro:marker_macro name="m35" id="35" parent_link="p5_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6">
+         <static>true</static>
+         <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+         <link name="p6_link">
+             <visual name="p6_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 1.7 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p6_m36">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m36" id="36" parent_link="p6_link" x="0.25" y="-0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6_m37">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m37" id="37" parent_link="p6_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6_m38">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m38" id="38" parent_link="p6_link" x="0.25" y="0.425" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6_m39">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m39" id="39" parent_link="p6_link" x="0.0" y="-0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6_m40">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m40" id="40" parent_link="p6_link" x="0.0" y="0.2125" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p6_m41">
+        <static>true</static>
+        <pose>6.913397459621556 -2.45 1.7499999999999996 3.141592653589793 -1.047197551196598 2.617993877991495</pose>
+        <xacro:marker_macro name="m41" id="41" parent_link="p6_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7">
+         <static>true</static>
+         <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+         <link name="p7_link">
+             <visual name="p7_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p7_m42">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m42" id="42" parent_link="p7_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7_m43">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m43" id="43" parent_link="p7_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7_m44">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m44" id="44" parent_link="p7_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7_m45">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m45" id="45" parent_link="p7_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7_m46">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m46" id="46" parent_link="p7_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p7_m47">
+        <static>true</static>
+        <pose>7.2 -2.1535898384862247 0.9999999999999998 -1.5707963267948963 -2.220446049250313e-16 1.48352986419518</pose>
+        <xacro:marker_macro name="m47" id="47" parent_link="p7_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8">
+         <static>true</static>
+         <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+         <link name="p8_link">
+             <visual name="p8_visual">
+             <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+                 <geometry>
+                     <box>
+                         <size>1.0 2.0 0.001</size>
+                     </box>
+                 </geometry>
+             <xacro:set_material color="0.0 0.0 1.0" />
+             </visual>
+         </link>
+    </model>
+    <model name="p8_m48">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m48" id="48" parent_link="p8_link" x="0.25" y="-0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8_m49">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m49" id="49" parent_link="p8_link" x="0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8_m50">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m50" id="50" parent_link="p8_link" x="0.25" y="0.5" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8_m51">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m51" id="51" parent_link="p8_link" x="0.0" y="-0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8_m52">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m52" id="52" parent_link="p8_link" x="0.0" y="0.25" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+    <model name="p8_m53">
+        <static>true</static>
+        <pose>6.8 -2.8464101615137753 0.9999999999999998 1.5707963267948963 0.0 -2.5307274153917776</pose>
+        <xacro:marker_macro name="m53" id="53" parent_link="p8_link" x="-0.25" y="0.0" z="0.001" roll="0.0" pitch="0.0" yaw="0.0"/>
+    </model>
+
+	</world>
+</sdf>
