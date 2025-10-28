@@ -52,9 +52,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self.photogrammetry = photogrammetry
 
     def add_photogrammetry(self, photogrammetry: pd.DataFrame):
-        """
-        TODO
-        """
         if self._added_photogrammetry:
             return  # already added
         for _, row in photogrammetry.iterrows():
@@ -68,9 +65,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
         self._added_photogrammetry = True
 
     def add_sensors(self, frame: Frame = None):
-        """
-        TODO
-        """
         if frame is None:
             frame = self.vehicle
         if type(frame) is Camera:
@@ -125,9 +119,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             self.add_edge(edge)
 
     def add_point_to_plane_error_minimization(self, lidar: Lidar) -> None:
-        """
-        TODO
-        """
         feature_noise = 0.01  # this should be integrated into the actual feature vector of the lidar object
         photogrammetry_planes: List[Plane] = []
         counter = 0
@@ -230,6 +221,21 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             # frame.covariance = covariance # Only if we do not want the covariance to be rotated to fit to the convention and thus given in camera coords
             if self.plot:
                 pearson = compute_pearson(covariance=covariance)
+                precision = np.sqrt(np.diag(covariance))
+                srot = Rotation.from_rotvec(precision[:3]).as_euler("xyz", degrees=True)
+                print(
+                    pd.DataFrame(
+                        data={
+                            "st_x": precision[3],
+                            "st_y": precision[4],
+                            "st_z": precision[5],
+                            "seuler_x": srot[0],
+                            "seuler_y": srot[1],
+                            "seuler_z": srot[2],
+                        },
+                        index=[0],
+                    )
+                )
                 plot_heatmap_compact(title=f"{frame.name} pearson matrix", map=pearson)
                 xs = []
                 ys = []
@@ -260,6 +266,34 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
             frame.transform = transform
             if self.plot:
                 pearson = compute_pearson(covariance)
+                precision = np.sqrt(np.diag(covariance))
+                srot = Rotation.from_rotvec(precision[:3]).as_euler("xyz", degrees=True)
+                print(
+                    pd.DataFrame(
+                        data={
+                            "st_x": precision[3],
+                            "st_y": precision[4],
+                            "st_z": precision[5],
+                            "seuler_x": srot[0],
+                            "seuler_y": srot[1],
+                            "seuler_z": srot[2],
+                        },
+                        index=[0],
+                    )
+                )
+                # print(
+                #    pd.DataFrame(
+                #        data={
+                #            "euler_x": frame.transform.rotation.as_euler("xyz", degrees=True)[0],
+                #            "euler_y": frame.transform.rotation.as_euler("xyz", degrees=True)[1],
+                #            "euler_z": frame.transform.rotation.as_euler("xyz", degrees=True)[2],
+                #            "t_x": frame.transform.translation[0],
+                #            "t_y": frame.transform.translation[1],
+                #            "t_z": frame.transform.translation[2],
+                #        },
+                #        index=[0],
+                #    )
+                # )
                 plot_heatmap_compact(title=f"{frame.name} pearson matrix", map=pearson)
             return
         for child in frame.children:
@@ -315,10 +349,6 @@ class ExtendedSparseOptimizer(g2o.SparseOptimizer):
 
 
 class VehicleFactory:
-    """
-    TODO
-    """
-
     def __init__(self, directory_to_datasets=get_dataset_directory()):
         self.directory_to_datasets = directory_to_datasets
 
@@ -331,9 +361,6 @@ class VehicleFactory:
         camera_feature_noise: float = None,  # homoscedastic feature noise here for simulation
         lidar_feature_noise: float = None,  # homoscedastic feature noise here for simulation
     ) -> Tuple[Vehicle, Solution]:
-        """
-        TODO
-        """
         solution_filepath = os.path.join(self.directory_to_datasets, dataset_name, "solution.json")
         solution = Solution(**json.load(open(solution_filepath)))
         vehicle = Vehicle(name="Vehicle", system_configuration=dataset_name)
@@ -443,9 +470,6 @@ def detect_planes(pointcloud: pd.DataFrame):
 
 
 def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 200, expected_noise=0.02, linear_refinement=True) -> Plane:
-    """
-    TODO
-    """
     missing = [required_column for required_column in ["x", "y", "z"] if required_column not in points.columns]
     assert len(missing) == 0, f"missing column(s): {missing}"
     points = points[["x", "y", "z"]]
@@ -475,9 +499,6 @@ def fit_plane_ransac(name: str, points: pd.DataFrame, iterations: int = 200, exp
 
 
 def fit_plane(name: str, points) -> Plane:
-    """
-    TODO
-    """
     if type(points) is pd.DataFrame:
         missing = [required_column for required_column in ["x", "y", "z"] if required_column not in points.columns]
         assert len(missing) == 0, f"missing column(s): {missing}"
@@ -493,9 +514,6 @@ def fit_plane(name: str, points) -> Plane:
 
 
 def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool = False):
-    """
-    TODO
-    """
     if len(optimizer.edges()) == 0:
         raise ValueError("No Edges!")
     if not silent:
@@ -565,9 +583,6 @@ def evaluate(optimizer: ExtendedSparseOptimizer, silent: bool = True, plot: bool
 
 
 def main(vehicle: Vehicle, dataset_name: str, post_processing=False, silent=False, plot=False) -> Tuple[Vehicle, dict]:
-    """
-    TODO
-    """
     optimizer = ExtendedSparseOptimizer(
         vehicle=vehicle,
         algorithm=g2o.OptimizationAlgorithmLevenberg(g2o.BlockSolverSE3(g2o.LinearSolverDenseSE3())),

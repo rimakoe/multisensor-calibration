@@ -83,7 +83,9 @@ def plot_residual(df: pd.DataFrame, camera: Camera):
     plt.show(block=True)
 
 
-def plot_convergence(df: pd.DataFrame, target: str, config: str = "mean", reference: float = 0.0, relative_lim: float = 0.1):
+def plot_convergence(df: pd.DataFrame, target: str, ylabel: str = None, config: str = "mean", reference: float = 0.0, relative_lim: float = 0.05):
+    if ylabel is None:
+        ylabel = target
     evolve = []
     references = []
     df["delta"] = df[target]
@@ -94,13 +96,13 @@ def plot_convergence(df: pd.DataFrame, target: str, config: str = "mean", refere
             evolve.append(np.median(df["delta"].iloc[:i]))
         references.append(reference)
     evolve = np.array(evolve)
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(4.5, 1.5))
     plt.grid(True, which="major", linestyle="-")
     plt.minorticks_on()
     plt.grid(True, which="minor", linestyle=":")
-    plt.ylabel(target)
+    plt.ylabel(ylabel)
     plt.ylim(reference * np.array([1.0 - relative_lim, 1.0 + relative_lim]))
     plt.xlabel("iterations")
-    plt.plot(list(range(10, len(df[target]), 10)), evolve)
-    plt.plot(list(range(10, len(df[target]), 10)), references, ":")
+    plt.semilogx(list(range(10, len(df[target]), 10)), evolve)
+    plt.semilogx(list(range(10, len(df[target]), 10)), references, ":")
     plt.show(block=True)

@@ -112,10 +112,6 @@ class Transform:
 
 
 class Frame:
-    """
-    TODO
-    """
-
     def __init__(self, name: str, parent: "Frame" = None, transform: Transform = Transform(), covariance: np.ndarray = np.zeros((6, 6))):
         assert covariance.shape == (6, 6)
         self.name: str = name
@@ -231,10 +227,6 @@ class Frame:
 
 
 class Vehicle(Frame):
-    """
-    TODO
-    """
-
     def __init__(self, name: str, system_configuration: str, parent: Frame = None):
         super().__init__(name=name, parent=parent)
         self.system_configuration = system_configuration
@@ -252,10 +244,6 @@ class Vehicle(Frame):
 
 
 class Sensor(Frame):
-    """
-    TODO
-    """
-
     def __init__(
         self,
         name: str,
@@ -345,10 +333,6 @@ class Plane(Frame):
 
 
 class Lidar(Sensor):
-    """
-    TODO
-    """
-
     class Intrinsics:
         def __init__(self, scale: float = 1.0, offset: np.ndarray = np.zeros((3, 1))):
             self.scale = scale
@@ -371,10 +355,6 @@ class Lidar(Sensor):
 
 
 class Camera(Sensor):
-    """
-    TODO
-    """
-
     class Intrinsics:
         def __init__(self, width: float, height: float, focal_length: np.ndarray, principal_point: np.ndarray, distortion: np.ndarray = None):
             assert focal_length.shape == (2, 1) or focal_length.shape == (2,)
